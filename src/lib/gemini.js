@@ -1,33 +1,13 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from './supabase';
+import { DEFAULT_AGENTS } from './agents_manager';
 
 const GEN_AI_KEY = import.meta.env.VITE_GEMINI_API_KEY || "placeholder";
 const genAI = new GoogleGenerativeAI(GEN_AI_KEY);
 
 const MODEL_NAME = "gemini-2.5-flash-lite";
 
-export const AGENT_ROLES = {
-  PM: {
-    name: "現場プロジェクトマネージャー (PM)",
-    description: "現場の実行可能性、スケジュールの遅延、リソース配分、安全面にフォーカスします。理論よりも現場の現実を重視します。",
-    style: "現実的で、時に批判的。具体的な現場の制約を強調する。"
-  },
-  CFO: {
-    name: "現場財務責任者 (CFO)",
-    description: "コスト効率、キャッシュフロー、財務的なダウンサイドリスクにフォーカスします。追加費用に対して非常に慎重です。",
-    style: "分析的で慎重。ROIや予算超過の可能性を厳しく指摘する。"
-  },
-  COO: {
-    name: "運営責任者 (COO)",
-    description: "契約上の義務、クライアント（発注者）との関係、長期的なブランド価値と法的リスクにフォーカスします。",
-    style: "戦略的で協調的。ステークホルダー管理と契約遵守を重視する。"
-  },
-  CEO: {
-    name: "最高経営責任者 (CEO)",
-    description: "全エージェントの意見を統合し、全社的な視点で最終判断を下します。不足している情報の特定も行います。",
-    style: "決断力があり、バランス重視。要点を簡潔にまとめ、アクションプランを提示する。"
-  }
-};
+export const AGENT_ROLES = DEFAULT_AGENTS;
 
 const BREVITY_INSTRUCTION = "\n【重要】回答は簡潔にまとめてください。各セクションは最大3つの箇条書きとし、全体で500文字程度に収めてください。";
 
@@ -75,11 +55,24 @@ function buildAgentPrompt(agentKey, session, project, roundNumber, previousMessa
     【今回の相談コンテキスト】
     - 相談内容: ${setupContext?.user_context || '未設定'}
     - 制約条件: ${setupContext?.constraints || '未設定'}
-    - 目標ゴール: ${setupContext?.goal || '未設定'}
+    - 目標ゴール: ${setupContext?.goal || '未設定'}${
+      setupContext?.focus_points
+        ? `\n    - 特に重視してほしい視点 (論点設定): ${setupContext.focus_points}`
+        : ''
+    }${
+      setupContext?.prfaq
+        ? `\n    【PRFAQ - プロジェクト完成時のニュース記事想定】\n${setupContext.prfaq}`
+        : ''
+    }
   `;
 
+  // Focus points は全ラウンドで一貫した視点注入として systemInstruction にも注入する
+  const focusInjection = setupContext?.focus_points
+    ? `\n【重視すべき視点】今回の議論では特に「${setupContext.focus_points}」の観点を織り込んで発言してください。`
+    : '';
+
   let prompt = '';
-  let systemInstruction = `あなたは建設会社の${role.name}です。${role.description} スタイル：${role.style}`;
+  let systemInstruction = `あなたは建設会社の${role.name}です。${role.description} スタイル：${role.style}${focusInjection}`;
 
   if (roundNumber === 1) {
     prompt = `プロジェクト「${project.name}」に関する意思決定議論を開始します。

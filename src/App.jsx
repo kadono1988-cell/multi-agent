@@ -48,6 +48,8 @@ function App() {
   const [setupContext, setSetupContext]     = useState('')
   const [setupConstraints, setSetupConstraints] = useState('')
   const [setupGoal, setSetupGoal]           = useState('')
+  const [setupFocusPoints, setSetupFocusPoints] = useState('')
+  const [setupPrfaq, setSetupPrfaq]         = useState('')
   const [isThinking, setIsThinking]         = useState(false)
   const [thinkingAgent, setThinkingAgent]   = useState(null)
 
@@ -126,6 +128,11 @@ function App() {
         setSession(state.session);
         setMessages(state.messages);
         setCurrentRound(state.currentRound || 1);
+        if (state.setupContext) setSetupContext(state.setupContext);
+        if (state.setupConstraints) setSetupConstraints(state.setupConstraints);
+        if (state.setupGoal) setSetupGoal(state.setupGoal);
+        if (state.setupFocusPoints) setSetupFocusPoints(state.setupFocusPoints);
+        if (state.setupPrfaq) setSetupPrfaq(state.setupPrfaq);
       }
     } catch { /* ignore corrupt storage */ }
   }, [projects]);
@@ -134,7 +141,8 @@ function App() {
     if (!isDemo && session && messages.length > 0 && activeProject && !session.readonly) {
       try {
         sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
-          session, messages, currentRound, activeProjectId: activeProject.id
+          session, messages, currentRound, activeProjectId: activeProject.id,
+          setupContext, setupConstraints, setupGoal, setupFocusPoints, setupPrfaq,
         }));
       } catch { /* storage quota exceeded */ }
     }
@@ -184,6 +192,8 @@ function App() {
     setSetupContext('');
     setSetupConstraints('');
     setSetupGoal('');
+    setSetupFocusPoints('');
+    setSetupPrfaq('');
     setStreamingContent(null);
   };
 
@@ -217,7 +227,13 @@ function App() {
     let finalTheme = themeLabel;
     if (setupContext) finalTheme += ` | ${setupContext.substring(0, 20)}…`;
 
-    const extendedContext = { user_context: setupContext, constraints: setupConstraints, goal: setupGoal };
+    const extendedContext = {
+      user_context: setupContext,
+      constraints: setupConstraints,
+      goal: setupGoal,
+      focus_points: setupFocusPoints,
+      prfaq: setupPrfaq,
+    };
     setLoading(true);
 
     try {
@@ -323,8 +339,15 @@ function App() {
           setThinkingAgent(agentKey);
           setStreamingContent({ agent_role: agentKey, content: '', round_number: nextR });
 
+          const roundContext = {
+            user_context: setupContext,
+            constraints: setupConstraints,
+            goal: setupGoal,
+            focus_points: setupFocusPoints,
+            prfaq: setupPrfaq,
+          };
           const response = await generateAgentResponseStream(
-            agentKey, session, activeProject, nextR, currentMessages, {}, customAgents,
+            agentKey, session, activeProject, nextR, currentMessages, roundContext, customAgents,
             (partial) => setStreamingContent({ agent_role: agentKey, content: partial, round_number: nextR })
           );
 
@@ -769,6 +792,22 @@ function App() {
                     <label>{t('setup.goal_label')} <span style={{ fontWeight:400, color:'var(--secondary)' }}>{t('setup.optional_suffix')}</span></label>
                     <textarea value={setupGoal} onChange={e => setSetupGoal(e.target.value)}
                       placeholder={t('setup.goal_placeholder')} />
+                  </div>
+                  <div className="form-group full">
+                    <label>{t('setup.focus_points_label')} <span style={{ fontWeight:400, color:'var(--secondary)' }}>{t('setup.optional_suffix')}</span></label>
+                    <textarea value={setupFocusPoints} onChange={e => setSetupFocusPoints(e.target.value)}
+                      placeholder={t('setup.focus_points_placeholder')} style={{ height: '80px' }} />
+                    <p style={{ fontSize: '0.78rem', color: 'var(--secondary)', marginTop: '0.3rem' }}>
+                      {t('setup.focus_points_hint')}
+                    </p>
+                  </div>
+                  <div className="form-group full">
+                    <label>{t('setup.prfaq_label')} <span style={{ fontWeight:400, color:'var(--secondary)' }}>{t('setup.optional_suffix')}</span></label>
+                    <textarea value={setupPrfaq} onChange={e => setSetupPrfaq(e.target.value)}
+                      placeholder={t('setup.prfaq_placeholder')} style={{ height: '140px', fontFamily: 'ui-monospace, monospace', fontSize: '0.85rem' }} />
+                    <p style={{ fontSize: '0.78rem', color: 'var(--secondary)', marginTop: '0.3rem' }}>
+                      {t('setup.prfaq_hint')}
+                    </p>
                   </div>
                 </div>
                 <button className="btn btn-primary" style={{ width:'100%', marginTop:'1.5rem', padding:'1rem' }}
