@@ -1,3 +1,4 @@
+import React from "react";
 import { Document, Page, Text, View, StyleSheet, Font } from "@react-pdf/renderer";
 
 Font.register({
@@ -19,7 +20,8 @@ const styles = StyleSheet.create({
   page: {
     paddingTop: 48,
     paddingBottom: 60,
-    paddingHorizontal: 48,
+    paddingLeft: 48,
+    paddingRight: 48,
     fontFamily: "NotoSansJP",
     fontSize: 10,
     color: COLORS.text,
@@ -42,7 +44,9 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: COLORS.bgSoft,
     borderRadius: 4,
-    borderLeft: `3pt solid ${COLORS.accent}`,
+    borderLeftWidth: 3,
+    borderLeftStyle: "solid",
+    borderLeftColor: COLORS.accent,
   },
   metaRow: {
     flexDirection: "row",
@@ -63,7 +67,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 10,
     paddingBottom: 4,
-    borderBottom: `1pt solid ${COLORS.border}`,
+    borderBottomWidth: 1,
+    borderBottomStyle: "solid",
+    borderBottomColor: COLORS.border,
     color: COLORS.accent,
   },
 
@@ -94,8 +100,10 @@ const styles = StyleSheet.create({
   roundHeading: {
     fontSize: 14,
     marginBottom: 10,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
+    paddingTop: 4,
+    paddingBottom: 4,
+    paddingLeft: 10,
+    paddingRight: 10,
     backgroundColor: COLORS.accent,
     color: "#ffffff",
     borderRadius: 3,
@@ -109,7 +117,9 @@ const styles = StyleSheet.create({
     color: COLORS.agentBar,
     marginBottom: 4,
     paddingLeft: 6,
-    borderLeft: `3pt solid ${COLORS.agentBar}`,
+    borderLeftWidth: 3,
+    borderLeftStyle: "solid",
+    borderLeftColor: COLORS.agentBar,
   },
   messageBody: {
     fontSize: 10,
@@ -126,7 +136,9 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: COLORS.muted,
     textAlign: "center",
-    borderTop: `0.5pt solid ${COLORS.border}`,
+    borderTopWidth: 0.5,
+    borderTopStyle: "solid",
+    borderTopColor: COLORS.border,
     paddingTop: 6,
   },
   pageNumber: {
@@ -200,7 +212,7 @@ export function SessionPDF({ project, session, messages, setupContext, labels })
         ) : null}
 
         {rounds.map(({ r, msgs }, idx) => (
-          <View key={r} style={styles.roundBlock} break={idx > 0}>
+          <View key={r} style={styles.roundBlock} {...(idx > 0 ? { break: true } : {})}>
             <Text style={styles.roundHeading}>Round {r}</Text>
             {msgs.map((m, i) => (
               <View key={i} style={styles.messageBlock}>

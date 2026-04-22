@@ -29,3 +29,4 @@ dist-ssr
 *.sw?
 
 .vercel
+dist_test_session.pdf

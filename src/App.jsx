@@ -392,10 +392,11 @@ function App() {
   const downloadSessionSummary = async () => {
     if (!activeProject || !session || messages.length === 0) return;
 
-    const [{ pdf }, { SessionPDF }] = await Promise.all([
-      import('@react-pdf/renderer'),
-      import('./lib/SessionPDF.jsx'),
-    ]);
+    try {
+      const [{ pdf }, { SessionPDF }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('./lib/SessionPDF.jsx'),
+      ]);
 
     const labels = {
       title: t('summary_export.title'),
@@ -440,17 +441,21 @@ function App() {
       />
     );
 
-    const blob = await pdf(doc).toBlob();
-    const safeName = activeProject.name.replace(/[<>:"/\\|?*]/g, '_');
-    const dateStr = new Date().toISOString().split('T')[0];
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `decision_memo_${safeName}_${dateStr}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+      const blob = await pdf(doc).toBlob();
+      const safeName = activeProject.name.replace(/[<>:"/\\|?*]/g, '_');
+      const dateStr = new Date().toISOString().split('T')[0];
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `decision_memo_${safeName}_${dateStr}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      alert(`PDF生成に失敗しました: ${err?.message || err}`);
+    }
   };
 
   // ── Project CRUD ─────────────────────────────────────────────────────────────
