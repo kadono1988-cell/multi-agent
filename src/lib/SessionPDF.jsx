@@ -5,109 +5,155 @@ Font.register({
   src: "/fonts/NotoSansJP-Regular.ttf",
 });
 
+const COLORS = {
+  text: "#1f2937",
+  muted: "#6b7280",
+  accent: "#1e40af",
+  border: "#d1d5db",
+  bgSoft: "#f3f4f6",
+  tableRowAlt: "#f9fafb",
+  agentBar: "#1e40af",
+};
+
 const styles = StyleSheet.create({
   page: {
-    padding: 48,
+    paddingTop: 48,
+    paddingBottom: 60,
+    paddingHorizontal: 48,
     fontFamily: "NotoSansJP",
     fontSize: 10,
-    color: "#111",
-    lineHeight: 1.5,
+    color: COLORS.text,
+    lineHeight: 1.6,
   },
-  title: {
-    fontSize: 18,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 9,
-    color: "#555",
+
+  coverTitle: {
+    fontSize: 20,
     marginBottom: 6,
+    color: COLORS.text,
   },
+  coverSubtitle: {
+    fontSize: 10,
+    color: COLORS.muted,
+    marginBottom: 20,
+  },
+
   metaBlock: {
-    marginTop: 8,
-    marginBottom: 16,
-    padding: 10,
-    backgroundColor: "#f6f8fa",
+    marginBottom: 20,
+    padding: 12,
+    backgroundColor: COLORS.bgSoft,
     borderRadius: 4,
+    borderLeft: `3pt solid ${COLORS.accent}`,
   },
   metaRow: {
     flexDirection: "row",
-    marginBottom: 3,
+    marginBottom: 4,
   },
   metaLabel: {
-    width: 70,
+    width: 80,
     fontSize: 9,
-    color: "#666",
+    color: COLORS.muted,
   },
   metaValue: {
     flex: 1,
-    fontSize: 9,
+    fontSize: 10,
   },
+
   sectionTitle: {
-    fontSize: 11,
-    marginTop: 14,
-    marginBottom: 6,
-    paddingBottom: 3,
-    borderBottom: "1pt solid #ccc",
+    fontSize: 13,
+    marginTop: 10,
+    marginBottom: 10,
+    paddingBottom: 4,
+    borderBottom: `1pt solid ${COLORS.border}`,
+    color: COLORS.accent,
   },
+
   setupField: {
-    marginBottom: 6,
+    marginBottom: 10,
   },
   setupLabel: {
-    fontSize: 8,
-    color: "#777",
-    marginBottom: 2,
+    fontSize: 9,
+    color: COLORS.muted,
+    marginBottom: 3,
   },
   setupValue: {
+    fontSize: 10,
+    lineHeight: 1.6,
+  },
+  prfaqValue: {
     fontSize: 9,
-    lineHeight: 1.4,
+    lineHeight: 1.5,
+    padding: 8,
+    backgroundColor: COLORS.tableRowAlt,
+    borderRadius: 3,
+  },
+
+  roundBlock: {
+    marginTop: 14,
+    marginBottom: 8,
   },
   roundHeading: {
-    fontSize: 13,
-    marginTop: 18,
-    marginBottom: 8,
-    paddingBottom: 4,
-    borderBottom: "2pt solid #4a90e2",
-    color: "#1a4d8f",
-  },
-  messageBlock: {
+    fontSize: 14,
     marginBottom: 10,
-    paddingLeft: 8,
-    borderLeft: "2pt solid #e0e0e0",
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    backgroundColor: COLORS.accent,
+    color: "#ffffff",
+    borderRadius: 3,
   },
-  agentHeader: {
+
+  messageBlock: {
+    marginBottom: 12,
+  },
+  agentLabel: {
+    fontSize: 11,
+    color: COLORS.agentBar,
+    marginBottom: 4,
+    paddingLeft: 6,
+    borderLeft: `3pt solid ${COLORS.agentBar}`,
+  },
+  messageBody: {
     fontSize: 10,
-    marginBottom: 3,
-    color: "#2c3e50",
+    lineHeight: 1.65,
+    paddingLeft: 10,
+    color: COLORS.text,
   },
-  agentContent: {
-    fontSize: 10,
-    lineHeight: 1.5,
-    color: "#222",
-  },
+
   footer: {
     position: "absolute",
     bottom: 24,
     left: 48,
     right: 48,
     fontSize: 8,
-    color: "#999",
+    color: COLORS.muted,
     textAlign: "center",
+    borderTop: `0.5pt solid ${COLORS.border}`,
+    paddingTop: 6,
   },
   pageNumber: {
     position: "absolute",
     bottom: 24,
     right: 48,
     fontSize: 8,
-    color: "#999",
+    color: COLORS.muted,
   },
 });
 
-function SetupField({ label, value }) {
+function SetupField({ label, value, monospace = false }) {
   if (!value || !value.trim()) return null;
   return (
     <View style={styles.setupField}>
       <Text style={styles.setupLabel}>{label}</Text>
-      <Text style={styles.setupValue}>{value}</Text>
+      <Text style={monospace ? styles.prfaqValue : styles.setupValue}>{value}</Text>
+    </View>
+  );
+}
+
+function MetaRow({ label, value }) {
+  if (!value) return null;
+  return (
+    <View style={styles.metaRow}>
+      <Text style={styles.metaLabel}>{label}</Text>
+      <Text style={styles.metaValue}>{value}</Text>
     </View>
   );
 }
@@ -128,37 +174,18 @@ export function SessionPDF({ project, session, messages, setupContext, labels })
 
   return (
     <Document>
-      <Page size="A4" style={styles.page} wrap>
-        <Text style={styles.title}>{labels.title}</Text>
-        <Text style={styles.subtitle}>{labels.subtitle}</Text>
+      <Page size="A4" style={styles.page}>
+        <View>
+          <Text style={styles.coverTitle}>{labels.title}</Text>
+          <Text style={styles.coverSubtitle}>{labels.subtitle}</Text>
+        </View>
 
         <View style={styles.metaBlock}>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>{labels.meta.project}</Text>
-            <Text style={styles.metaValue}>{project?.name || ""}</Text>
-          </View>
-          {project?.client ? (
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>{labels.meta.client}</Text>
-              <Text style={styles.metaValue}>{project.client}</Text>
-            </View>
-          ) : null}
-          {project?.budget ? (
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>{labels.meta.budget}</Text>
-              <Text style={styles.metaValue}>{project.budget}</Text>
-            </View>
-          ) : null}
-          <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>{labels.meta.theme}</Text>
-            <Text style={styles.metaValue}>{session?.theme_type || ""}</Text>
-          </View>
-          {createdAt ? (
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>{labels.meta.date}</Text>
-              <Text style={styles.metaValue}>{createdAt}</Text>
-            </View>
-          ) : null}
+          <MetaRow label={labels.meta.project} value={project?.name} />
+          <MetaRow label={labels.meta.client} value={project?.client} />
+          <MetaRow label={labels.meta.budget} value={project?.budget} />
+          <MetaRow label={labels.meta.theme} value={session?.theme_type} />
+          <MetaRow label={labels.meta.date} value={createdAt} />
         </View>
 
         {hasSetup ? (
@@ -168,34 +195,30 @@ export function SessionPDF({ project, session, messages, setupContext, labels })
             <SetupField label={labels.setup.constraints} value={setupContext.constraints} />
             <SetupField label={labels.setup.goal} value={setupContext.goal} />
             <SetupField label={labels.setup.focus_points} value={setupContext.focus_points} />
-            <SetupField label={labels.setup.prfaq} value={setupContext.prfaq} />
+            <SetupField label={labels.setup.prfaq} value={setupContext.prfaq} monospace />
           </View>
         ) : null}
 
-        {rounds.map(({ r, msgs }) => (
-          <View key={r} wrap={false}>
-            <Text style={styles.roundHeading}>
-              {labels.round_prefix} {r}
-            </Text>
+        {rounds.map(({ r, msgs }, idx) => (
+          <View key={r} style={styles.roundBlock} break={idx > 0}>
+            <Text style={styles.roundHeading}>Round {r}</Text>
             {msgs.map((m, i) => (
-              <View key={i} style={styles.messageBlock} wrap={false}>
-                <Text style={styles.agentHeader}>
-                  [{m.agent_role}]
-                </Text>
-                <Text style={styles.agentContent}>{m.content}</Text>
+              <View key={i} style={styles.messageBlock}>
+                <Text style={styles.agentLabel}>{m.agent_role}</Text>
+                <Text style={styles.messageBody}>{m.content}</Text>
               </View>
             ))}
           </View>
         ))}
 
+        <Text style={styles.footer} fixed>
+          {labels.footer}
+        </Text>
         <Text
           style={styles.pageNumber}
           render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
           fixed
         />
-        <Text style={styles.footer} fixed>
-          {labels.footer}
-        </Text>
       </Page>
     </Document>
   );
