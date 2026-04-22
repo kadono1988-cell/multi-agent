@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import './index.css'
 import { supabase } from './lib/supabase'
@@ -55,6 +55,7 @@ function App() {
 
   // ── Streaming state ─────────────────────────────────────────────────────────
   const [streamingContent, setStreamingContent] = useState(null)
+  const timelineEndRef = useRef(null)
 
   // ── Agents & Knowledge ──────────────────────────────────────────────────────
   const [customAgents, setCustomAgents]     = useState({})
@@ -155,6 +156,12 @@ function App() {
       setSessionHistory([]);
     }
   }, [activeProject?.id, isDemo]);
+
+  // Auto-scroll the page as new messages stream in so the latest reply is always visible.
+  useEffect(() => {
+    if (!session || !timelineEndRef.current) return;
+    timelineEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages.length, streamingContent?.content?.length, isThinking, session?.id]);
 
   // ── Data fetchers ────────────────────────────────────────────────────────────
   const loadExpertAgents = async () => {
@@ -382,41 +389,64 @@ function App() {
   };
 
   // ── Download ─────────────────────────────────────────────────────────────────
-  const downloadSessionSummary = () => {
+  const downloadSessionSummary = async () => {
     if (!activeProject || !session || messages.length === 0) return;
 
-    const lines = [
-      t('summary_export.title'),
-      '='.repeat(55),
-      `${t('summary_export.label_project')} : ${activeProject.name}`,
-      `${t('summary_export.label_client')} : ${activeProject.client || t('summary_export.unset')}`,
-      `${t('summary_export.label_budget')} : ${activeProject.budget || t('summary_export.unset')}`,
-      `${t('summary_export.label_theme')} : ${session.theme_type}`,
-      `${t('summary_export.label_date')} : ${new Date(session.created_at).toLocaleDateString(dateLocale, { year: 'numeric', month: 'long', day: 'numeric' })}`,
-      '='.repeat(55),
-      ''
-    ];
+    const [{ pdf }, { SessionPDF }] = await Promise.all([
+      import('@react-pdf/renderer'),
+      import('./lib/SessionPDF.jsx'),
+    ]);
 
-    for (let r = 1; r <= 5; r++) {
-      const roundMsgs = messages.filter(m => m.round_number === r);
-      if (roundMsgs.length === 0) continue;
-      lines.push(`▌ Round ${r}`);
-      lines.push('-'.repeat(40));
-      roundMsgs.forEach(m => {
-        lines.push(`\n【${m.agent_role}】`);
-        lines.push(m.content);
-      });
-      lines.push('');
-    }
+    const labels = {
+      title: t('summary_export.title'),
+      subtitle: t('summary_export.subtitle'),
+      locale: dateLocale,
+      meta: {
+        project: t('summary_export.label_project'),
+        client: t('summary_export.label_client'),
+        budget: t('summary_export.label_budget'),
+        theme: t('summary_export.label_theme'),
+        date: t('summary_export.label_date'),
+      },
+      sections: {
+        setup: t('summary_export.section_setup'),
+      },
+      setup: {
+        user_context: t('setup.context_label'),
+        constraints: t('setup.constraints_label'),
+        goal: t('setup.goal_label'),
+        focus_points: t('setup.focus_points_label'),
+        prfaq: t('setup.prfaq_label'),
+      },
+      round_prefix: 'Round',
+      footer: t('summary_export.footer', { date: new Date().toLocaleString(dateLocale) }),
+    };
 
-    const text = lines.join('\n');
+    const setupBundle = {
+      user_context: setupContext,
+      constraints: setupConstraints,
+      goal: setupGoal,
+      focus_points: setupFocusPoints,
+      prfaq: setupPrfaq,
+    };
+
+    const doc = (
+      <SessionPDF
+        project={activeProject}
+        session={session}
+        messages={messages}
+        setupContext={setupBundle}
+        labels={labels}
+      />
+    );
+
+    const blob = await pdf(doc).toBlob();
     const safeName = activeProject.name.replace(/[<>:"/\\|?*]/g, '_');
     const dateStr = new Date().toISOString().split('T')[0];
-    const blob = new Blob(['﻿' + text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `decision_memo_${safeName}_${dateStr}.txt`;
+    a.download = `decision_memo_${safeName}_${dateStr}.pdf`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -947,15 +977,10 @@ function App() {
                 </h2>
               </div>
               <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                {!session.readonly && currentRound < 5 && (
-                  <button className="btn btn-primary" onClick={handleNextRound} disabled={loading || isThinking}>
-                    {isThinking ? t('session.generating') : t('session.next_round', { n: currentRound + 1 })}
-                  </button>
-                )}
-                {(currentRound >= 5 || session.readonly) && messages.length > 0 && (
-                  <button className="btn" style={{ display:'flex', alignItems:'center', gap:'5px' }} onClick={downloadSessionSummary}>
-                    <Download size={15} /> {t('session.download_memo')}
-                  </button>
+                {isThinking && !session.readonly && (
+                  <span style={{ fontSize: '0.85rem', color: 'var(--secondary)' }}>
+                    {t('session.generating')}
+                  </span>
                 )}
               </div>
             </div>
@@ -996,7 +1021,28 @@ function App() {
                   </div>
                 </div>
               )}
+              <div ref={timelineEndRef} style={{ height: 1 }} />
             </div>
+
+            {!session.readonly && currentRound < 5 && messages.length > 0 && !isThinking && (
+              <button
+                className="btn btn-primary floating-next-round"
+                onClick={handleNextRound}
+                disabled={loading}
+                aria-label={t('session.next_round', { n: currentRound + 1 })}
+              >
+                {t('session.next_round', { n: currentRound + 1 })}
+              </button>
+            )}
+            {(currentRound >= 5 || session.readonly) && messages.length > 0 && (
+              <button
+                className="btn floating-download-memo"
+                onClick={downloadSessionSummary}
+                aria-label={t('session.download_memo')}
+              >
+                <Download size={16} /> {t('session.download_memo')}
+              </button>
+            )}
           </div>
         )}
       </main>

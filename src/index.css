@@ -112,6 +112,42 @@ header {
   background-color: #2563eb;
 }
 
+/* Floating action buttons (visible regardless of scroll position) */
+.floating-next-round,
+.floating-download-memo {
+  position: fixed;
+  right: calc(340px + 24px); /* right-panel width + gutter */
+  bottom: 32px;
+  z-index: 50;
+  padding: 0.85rem 1.4rem;
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.floating-next-round:hover:not(:disabled),
+.floating-download-memo:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+}
+
+.floating-next-round:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1024px) {
+  .floating-next-round,
+  .floating-download-memo {
+    right: 20px;
+    bottom: 20px;
+  }
+}
+
 /* Discussion Styles */
 @keyframes fadeInSlide {
   from { opacity: 0; transform: translateX(-10px); }
