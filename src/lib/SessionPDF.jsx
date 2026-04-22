@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
   },
 
   roundBlock: {
-    marginTop: 14,
+    marginTop: 20,
     marginBottom: 8,
   },
   roundHeading: {
@@ -128,23 +128,26 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
 
-  footer: {
+  footerContainer: {
     position: "absolute",
-    bottom: 24,
     left: 48,
     right: 48,
-    fontSize: 8,
-    color: COLORS.muted,
-    textAlign: "center",
+    bottom: 24,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     borderTopWidth: 0.5,
     borderTopStyle: "solid",
     borderTopColor: COLORS.border,
     paddingTop: 6,
   },
+  footer: {
+    flex: 1,
+    fontSize: 8,
+    color: COLORS.muted,
+    textAlign: "center",
+  },
   pageNumber: {
-    position: "absolute",
-    bottom: 24,
-    right: 48,
     fontSize: 8,
     color: COLORS.muted,
   },
@@ -211,11 +214,11 @@ export function SessionPDF({ project, session, messages, setupContext, labels })
           </View>
         ) : null}
 
-        {rounds.map(({ r, msgs }, idx) => (
-          <View key={r} style={styles.roundBlock} {...(idx > 0 ? { break: true } : {})}>
+        {rounds.map(({ r, msgs }) => (
+          <View key={r} style={styles.roundBlock} minPresenceAhead={40}>
             <Text style={styles.roundHeading}>Round {r}</Text>
             {msgs.map((m, i) => (
-              <View key={i} style={styles.messageBlock}>
+              <View key={i} style={styles.messageBlock} minPresenceAhead={30}>
                 <Text style={styles.agentLabel}>{m.agent_role}</Text>
                 <Text style={styles.messageBody}>{m.content}</Text>
               </View>
@@ -223,14 +226,13 @@ export function SessionPDF({ project, session, messages, setupContext, labels })
           </View>
         ))}
 
-        <Text style={styles.footer} fixed>
-          {labels.footer}
-        </Text>
-        <Text
-          style={styles.pageNumber}
-          render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-          fixed
-        />
+        <View style={styles.footerContainer} fixed>
+          <Text style={styles.footer}>{labels.footer}</Text>
+          <Text
+            style={styles.pageNumber}
+            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+          />
+        </View>
       </Page>
     </Document>
   );

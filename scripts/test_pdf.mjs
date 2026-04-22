@@ -17,14 +17,47 @@ Font.register({ family: "NotoSansJP", src: fontPath });
 // Dynamic import so the module's top-level Font.register runs after ours (no-op).
 const { SessionPDF } = await import("../src/lib/SessionPDF.jsx");
 
+// Use realistic AI-style markdown content that previously triggered PDFKit errors.
+const realisticPM = `よし、始めよう。湾岸タワーマンション建替え、鉄骨納期遅延か。話は早い。
+
+### 1. 現状の理解
+
+* **「湾岸タワーマンション躯体工事の鉄骨納期遅延」事例の再現。** 8週遅延は、上棟式、販売開始時期への影響は計り知れない。これは単なる工程問題じゃない、発注者のキャッシュフローに直結する。
+* **販売開始時期厳守という制約が、選択肢を狭めている。** 6月販売開始は、デベロッパーX社の生命線だ。ここを外すと、信頼関係にヒビが入るどころか、事業そのものが危うくなる。
+* **追加コスト2億円までというのも、現場泣かせだ。** 限られた予算で、この遅延を3週間以内に圧縮するとなると、相当な工夫と覚悟が要る。
+
+### 2. 主要な論点
+
+* **国内メーカーへの発注切替の実現可能性。**
+セカンドソース確保は当然として、今から国内メーカーに発注できるか？製造能力、納期、そして「品質」。過去の事例でもあったが、安易な切替は、新たな問題の火種になりかねない。
+* **工区割見直し vs プレハブ化。** 机上の計画通りにできるか？作業員動線、仮設、安全。特に高層階になるほど、作業動線の交錯は命取りだ。
+* **発注者との信頼関係維持。** 販売開始時期を守るための「追加コスト」の折半交渉。`;
+
+const realisticCFO = `承知いたしました。現場財務責任者として、プロジェクト「湾岸タワーマンション建替え」における鉄骨納期遅延問題について、冷静かつ分析的に対応いたします。
+
+### 1. 現状の理解 [湾岸タワーマンション躯体工事の鉄骨納期遅延] を踏まえた分析
+
+* 海外製鉄骨の輸送遅延により、当初8週間の遅延が見込まれる。販売開始時期（6月）厳守が最優先課題。
+* 追加コスト2億円の制約内で、最終遅延を3週間以内に圧縮する必要がある。
+* 過去事例では、国内メーカーへの一部切替と並行施工で対応し、遅延を3週間に圧縮、コスト折半で着地している。
+
+### 2. 主要な論点
+
+* **国内メーカーへの切替可能性とWACC:** 国内メーカーへの切替による追加コストがWACCを上回るか、また、その調達リードタイムと品質を現行サプライヤーと比較評価。
+* **工区割見直し・プレハブ化のNPV:** 各戦略による追加コストと、販売開始時期厳守によるキャッシュフロー最大化効果をNPVで比較。`;
+
 const sampleMessages = [
-  { round_number: 1, agent_role: "PM", content: "現場PMとしての見解です。納期遅延は現場で5日前に察知していた問題。" + "長い応答のテスト。".repeat(40) },
-  { round_number: 1, agent_role: "CFO", content: "WACC超過リスクがあるため慎重に。ワーストケースで粗利10%残るか試算。" + "CFOの詳細説明。".repeat(30) },
-  { round_number: 1, agent_role: "COO", content: "契約第12条の物価スライド条項を再確認します。" + "COO視点の補足。".repeat(25) },
-  { round_number: 2, agent_role: "PM", content: "2ラウンド目の現場応答。" + "現場の実態を繰り返し伝える。".repeat(35) },
-  { round_number: 2, agent_role: "CFO", content: "他メンバー意見への反論。" + "数字で詰める。".repeat(40) },
-  { round_number: 3, agent_role: "CEO", content: "不足情報を3点特定する。" + "CEO視点。".repeat(30) },
-  { round_number: 5, agent_role: "CEO", content: "最終判断を下す。" + "具体アクション。".repeat(20) },
+  { round_number: 1, agent_role: "PM", content: realisticPM },
+  { round_number: 1, agent_role: "CFO", content: realisticCFO },
+  { round_number: 1, agent_role: "COO", content: realisticPM },
+  { round_number: 2, agent_role: "PM", content: realisticPM },
+  { round_number: 2, agent_role: "CFO", content: realisticCFO },
+  { round_number: 2, agent_role: "COO", content: realisticCFO },
+  { round_number: 3, agent_role: "CEO", content: realisticPM },
+  { round_number: 4, agent_role: "PM", content: realisticPM },
+  { round_number: 4, agent_role: "CFO", content: realisticCFO },
+  { round_number: 4, agent_role: "COO", content: realisticPM },
+  { round_number: 5, agent_role: "CEO", content: realisticCFO },
 ];
 
 const labels = {
