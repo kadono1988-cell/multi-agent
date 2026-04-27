@@ -23,7 +23,48 @@
   "nav": {
     "dashboard": "Dashboard",
     "agents": "Expert team",
-    "knowledge": "Knowledge / cases"
+    "knowledge": "Knowledge / cases",
+    "analytics": "Analytics"
+  },
+  "similar": {
+    "heading": "Similar past decisions",
+    "intro": "Found earlier decisions that look similar to this project."
+  },
+  "news": {
+    "button": "Spin up topic from news",
+    "modal_title": "Generate a discussion from news",
+    "modal_intro": "Paste a news article or trend report; AI will draft a project + theme + focus points.",
+    "placeholder": "Paste news text or summary...",
+    "analyze": "🔍 Analyse",
+    "analyzing": "Analysing...",
+    "cancel": "Cancel",
+    "failed": "Could not derive a topic from the article",
+    "preview_title": "AI-suggested topic",
+    "field_name": "Project name",
+    "field_summary": "Summary",
+    "field_theme": "Recommended theme",
+    "field_focus": "Focus points",
+    "apply": "✓ Create project and start"
+  },
+  "analytics": {
+    "heading": "Decision analytics",
+    "intro": "Trend across past discussions and the confidence levels expressed.",
+    "loading": "Loading...",
+    "no_data": "No data yet",
+    "sessions_heading": "Total sessions",
+    "completed_label": "Completed:",
+    "by_theme_heading": "By theme",
+    "confidence_heading": "Confidence mix",
+    "gate_heading": "Final-decision adoption",
+    "conf_by_agent": "Confidence by agent",
+    "agent_col": "Agent",
+    "conf_high": "High",
+    "conf_medium": "Medium",
+    "conf_low": "Low",
+    "conf_untagged": "Untagged",
+    "gate_adopt": "Adopt",
+    "gate_reject": "Reject",
+    "gate_pending": "Pending"
   },
   "projects": {
     "list_heading": "Projects",

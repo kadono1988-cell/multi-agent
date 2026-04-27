@@ -29,6 +29,29 @@ async function embedQuery(text) {
   }
 }
 
+// Public: embed an arbitrary string (used by App.jsx after a session
+// completes so the decision memo can be matched against later projects).
+export const embedText = embedQuery;
+
+// Look up similar completed sessions by project brief.
+export const fetchSimilarDecisions = async ({ project, excludeSessionId = null, k = 3 }) => {
+  try {
+    const queryText = [project?.name, project?.summary, project?.building_usage]
+      .filter(Boolean).join('\n');
+    const vec = await embedQuery(queryText);
+    if (!vec) return [];
+    const { data, error } = await supabase.rpc('match_past_decisions', {
+      query_embedding: vec,
+      match_count: k,
+      exclude_session: excludeSessionId,
+    });
+    if (error || !data) return [];
+    return data;
+  } catch {
+    return [];
+  }
+};
+
 async function fetchRAGContext(project) {
   try {
     // 1) Vector similarity search via pgvector RPC (preferred)
@@ -286,6 +309,56 @@ export const generateAgentResponse = async (
 
   const content = await callGemini(prompt, systemInstruction);
   return { role: agentKey, content };
+};
+
+// ── News → discussion topic ──────────────────────────────────────────────────
+// Convert a pasted news article (or any free-form trend report) into a
+// proposed project entry + suggested discussion theme. Lets the user spin up
+// a "今週の業界ニュース" discussion in 30 seconds without manually filling
+// the project form.
+
+export const suggestTopicFromNews = async ({ newsText, locale = 'ja' }) => {
+  if (!newsText || newsText.length < 30) return null;
+  const langInstruction = locale === 'en'
+    ? 'Reply in English.' : 'すべて日本語で。';
+
+  const prompt = `次のニュース記事を読み、建設会社の経営会議で議論すべき「議題」と、議論用に新規作成すべきプロジェクトの簡易プロファイルをJSONのみで提案してください。${langInstruction}
+
+【ニュース原文】
+${newsText.slice(0, 4000)}
+
+【出力JSONスキーマ厳守】
+{
+  "project_name": "新規プロジェクト名 (記事のテーマを反映、30字以内)",
+  "project_summary": "ニュースを踏まえた状況・課題の要約 (200字以内)",
+  "project_type": "Residential | Commercial | Infrastructure | Industrial | Public | Other",
+  "strategic_importance": "high | medium | low",
+  "recommended_theme": "delay | go_no_go | design_change のいずれか、もしくは独自テーマ",
+  "focus_points": "議論で重視すべき視点 (1-2文)",
+  "user_context": "相談内容として setup に入れるテキスト (1-2文)",
+  "constraints": "ニュースから読み取れる制約条件",
+  "goal": "議論で得たい結論 (1文)"
+}`;
+
+  try {
+    const raw = await callGemini(prompt, 'あなたは建設業界アナリストです。' + langInstruction);
+    const parsed = extractJsonObject(raw);
+    if (!parsed) return null;
+    return {
+      project_name: parsed.project_name || '',
+      project_summary: parsed.project_summary || '',
+      project_type: parsed.project_type || 'Other',
+      strategic_importance: ['high', 'medium', 'low'].includes(parsed.strategic_importance) ? parsed.strategic_importance : 'medium',
+      recommended_theme: parsed.recommended_theme || '',
+      focus_points: parsed.focus_points || '',
+      user_context: parsed.user_context || '',
+      constraints: parsed.constraints || '',
+      goal: parsed.goal || '',
+    };
+  } catch (err) {
+    console.warn('[Gemini] suggestTopicFromNews failed:', err?.message || err);
+    return null;
+  }
 };
 
 // ── Live discussion summary ──────────────────────────────────────────────────

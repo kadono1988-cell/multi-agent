@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import './index.css'
 import { supabase } from './lib/supabase'
-import { generateAgentResponseStream, generateAgentResponse, synthesizeDecisionMemo, suggestMeetingDesign, summarizeProgress, extractConfidence, AGENT_ROLES } from './lib/gemini'
+import { generateAgentResponseStream, generateAgentResponse, synthesizeDecisionMemo, suggestMeetingDesign, summarizeProgress, embedText, fetchSimilarDecisions, suggestTopicFromNews, extractConfidence, AGENT_ROLES } from './lib/gemini'
 import { getRoundConfig } from './lib/roundConfig'
 import { loadAgents, saveAgentToStorage, deleteAgentFromStorage } from './lib/agents_manager'
 import { MOCK_PROJECTS, MOCK_MESSAGES } from './lib/mockData'
@@ -92,6 +92,12 @@ function App() {
   })
   const [participants, setParticipants] = useState([]) // agent_ids for this session
   const [personaFiles, setPersonaFiles] = useState({}) // { [agentId]: extractedText }
+  const [similarDecisions, setSimilarDecisions] = useState([])
+  const [newsModalOpen, setNewsModalOpen] = useState(false)
+  const [newsText, setNewsText] = useState('')
+  const [newsSuggestion, setNewsSuggestion] = useState(null)
+  const [isAnalyzingNews, setIsAnalyzingNews] = useState(false)
+  const [analyticsData, setAnalyticsData] = useState(null)
   const [liveSummary, setLiveSummary] = useState(null)
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [projectStatusMap, setProjectStatusMap] = useState({})
@@ -201,8 +207,10 @@ function App() {
   useEffect(() => {
     if (activeProject && !isDemo) {
       loadSessionHistory(activeProject.id);
+      fetchSimilarDecisions({ project: activeProject, k: 3 }).then(setSimilarDecisions);
     } else {
       setSessionHistory([]);
+      setSimilarDecisions([]);
     }
   }, [activeProject?.id, isDemo]);
 
@@ -365,6 +373,78 @@ function App() {
     // round flow needs at least one CEO for ceo_check / ceo_final.
     if (customAgents.CEO && !out.CEO) out.CEO = { ...customAgents.CEO, is_active: true };
     return out;
+  };
+
+  const analyzeNews = async () => {
+    if (!newsText.trim() || isAnalyzingNews) return;
+    setIsAnalyzingNews(true);
+    try {
+      const sug = await suggestTopicFromNews({
+        newsText,
+        locale: i18n.resolvedLanguage === 'en' ? 'en' : 'ja',
+      });
+      if (sug) setNewsSuggestion(sug);
+      else alert(t('news.failed'));
+    } finally {
+      setIsAnalyzingNews(false);
+    }
+  };
+
+  const applyNewsSuggestion = async () => {
+    if (!newsSuggestion) return;
+    // Create the project, switch to it, prefill setup, open theme modal
+    const newProject = {
+      name: newsSuggestion.project_name,
+      summary: newsSuggestion.project_summary,
+      type: newsSuggestion.project_type,
+      strategic_importance: newsSuggestion.strategic_importance,
+    };
+    const { data, error } = await supabase.from('projects').insert(newProject).select().single();
+    if (error) {
+      alert(`Failed: ${error.message}`);
+      return;
+    }
+    await fetchProjects();
+    setActiveProject(data);
+    setSetupContext(newsSuggestion.user_context);
+    setSetupConstraints(newsSuggestion.constraints);
+    setSetupGoal(newsSuggestion.goal);
+    setSetupFocusPoints(newsSuggestion.focus_points);
+    const matched = THEMES.find(th => th.id === newsSuggestion.recommended_theme || th.label === newsSuggestion.recommended_theme);
+    if (matched) setSetupTheme(matched.id);
+    setNewsModalOpen(false);
+    setNewsText('');
+    setNewsSuggestion(null);
+  };
+
+  const loadAnalytics = async () => {
+    if (isDemo) {
+      setAnalyticsData({ totalSessions: 0, completed: 0, byTheme: {}, confidenceMix: {}, gateAdoption: {} });
+      return;
+    }
+    const { data: sessions } = await supabase.from('decision_sessions').select('status, theme_type, gate_responses, created_at, max_rounds');
+    const { data: msgs }     = await supabase.from('agent_messages').select('agent_role, confidence, round_number');
+
+    const totalSessions = sessions?.length || 0;
+    const completed = sessions?.filter(s => s.status === 'completed').length || 0;
+    const byTheme = {};
+    for (const s of sessions || []) {
+      byTheme[s.theme_type] = (byTheme[s.theme_type] || 0) + 1;
+    }
+    const confidenceMix = { high: 0, medium: 0, low: 0, untagged: 0 };
+    const confidenceByAgent = {};
+    for (const m of msgs || []) {
+      const c = m.confidence || 'untagged';
+      confidenceMix[c] = (confidenceMix[c] || 0) + 1;
+      if (!confidenceByAgent[m.agent_role]) confidenceByAgent[m.agent_role] = { high: 0, medium: 0, low: 0, untagged: 0 };
+      confidenceByAgent[m.agent_role][c] = (confidenceByAgent[m.agent_role][c] || 0) + 1;
+    }
+    const gateAdoption = { adopt: 0, reject: 0, pending: 0 };
+    for (const s of sessions || []) {
+      const final = s.gate_responses?.final?.decision;
+      if (final && gateAdoption[final] !== undefined) gateAdoption[final]++;
+    }
+    setAnalyticsData({ totalSessions, completed, byTheme, confidenceMix, confidenceByAgent, gateAdoption });
   };
 
   const refreshLiveSummary = async () => {
@@ -633,6 +713,24 @@ function App() {
         }),
       ]);
 
+      // 1.5 Persist the decision summary + embedding so future projects can
+      // surface this as a "similar past decision" via pgvector.
+      if (!isDemo && report && session?.id) {
+        const summaryText = [
+          activeProject?.name,
+          report.executive_summary,
+          report.conclusion,
+          (report.discussion_points || []).join(' / '),
+          report.final_decision?.headline,
+        ].filter(Boolean).join('\n');
+        const summaryVec = await embedText(summaryText);
+        if (summaryVec) {
+          await supabase.from('decision_sessions')
+            .update({ decision_summary: summaryText, summary_embedding: summaryVec })
+            .eq('id', session.id);
+        }
+      }
+
       const labels = {
         title: t('summary_export.title'),
         subtitle: t('summary_export.subtitle'),
@@ -796,6 +894,9 @@ function App() {
           <button className={`nav-item ${activeTab === 'knowledge' ? 'active' : ''}`} onClick={() => setActiveTab('knowledge')}>
             <BookOpen size={20} /><span>{t('nav.knowledge')}</span>
           </button>
+          <button className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => { setActiveTab('analytics'); loadAnalytics(); }}>
+            <BarChart3 size={20} /><span>{t('nav.analytics')}</span>
+          </button>
         </nav>
 
         <div className="sidebar-divider"></div>
@@ -806,9 +907,14 @@ function App() {
               <h3 style={{ fontSize: '0.78rem', color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 {t('projects.list_heading')}
               </h3>
-              <button className="btn-icon" title={t('projects.new_title')} onClick={() => { setIsEditingProject(true); setProjectForm(EMPTY_PROJECT_FORM); }}>
-                <PlusCircle size={17} />
-              </button>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button className="btn-icon" title={t('news.button')} onClick={() => setNewsModalOpen(true)}>
+                  📰
+                </button>
+                <button className="btn-icon" title={t('projects.new_title')} onClick={() => { setIsEditingProject(true); setProjectForm(EMPTY_PROJECT_FORM); }}>
+                  <PlusCircle size={17} />
+                </button>
+              </div>
             </div>
 
             <input
@@ -937,6 +1043,115 @@ function App() {
             )}
           </div>
 
+        ) : activeTab === 'analytics' ? (
+          <div className="analytics-page">
+            <h2 style={{ marginBottom: '1rem' }}>📊 {t('analytics.heading')}</h2>
+            <p style={{ color: 'var(--secondary)', fontSize: '0.88rem', marginBottom: '1.5rem' }}>
+              {t('analytics.intro')}
+            </p>
+            {analyticsData ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+                <div className="card">
+                  <h3 style={{ fontSize: '0.85rem', marginBottom: '0.6rem' }}>{t('analytics.sessions_heading')}</h3>
+                  <div style={{ fontSize: '2rem', fontWeight: 700 }}>{analyticsData.totalSessions}</div>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--secondary)' }}>
+                    {t('analytics.completed_label')} {analyticsData.completed} / {analyticsData.totalSessions}
+                  </p>
+                </div>
+
+                <div className="card">
+                  <h3 style={{ fontSize: '0.85rem', marginBottom: '0.6rem' }}>{t('analytics.by_theme_heading')}</h3>
+                  {Object.entries(analyticsData.byTheme).length === 0 ? (
+                    <p style={{ fontSize: '0.78rem', color: 'var(--secondary)' }}>{t('analytics.no_data')}</p>
+                  ) : Object.entries(analyticsData.byTheme).map(([k, v]) => {
+                    const pct = (v / analyticsData.totalSessions) * 100;
+                    return (
+                      <div key={k} style={{ marginBottom: 6 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: 2 }}>
+                          <span>{getThemeLabel(k)}</span><span>{v}</span>
+                        </div>
+                        <div style={{ background: 'var(--border)', height: 6 }}>
+                          <div style={{ background: 'var(--accent)', height: 6, width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="card">
+                  <h3 style={{ fontSize: '0.85rem', marginBottom: '0.6rem' }}>{t('analytics.confidence_heading')}</h3>
+                  {(() => {
+                    const total = Object.values(analyticsData.confidenceMix).reduce((a, b) => a + b, 0) || 1;
+                    const colors = { high: '#10b981', medium: '#f59e0b', low: '#ef4444', untagged: '#94a3b8' };
+                    return Object.entries(analyticsData.confidenceMix).map(([k, v]) => {
+                      const pct = (v / total) * 100;
+                      return (
+                        <div key={k} style={{ marginBottom: 6 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: 2 }}>
+                            <span>{t(`analytics.conf_${k}`)}</span><span>{v} ({pct.toFixed(0)}%)</span>
+                          </div>
+                          <div style={{ background: 'var(--border)', height: 6 }}>
+                            <div style={{ background: colors[k] || 'var(--accent)', height: 6, width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+
+                <div className="card">
+                  <h3 style={{ fontSize: '0.85rem', marginBottom: '0.6rem' }}>{t('analytics.gate_heading')}</h3>
+                  {(() => {
+                    const total = Object.values(analyticsData.gateAdoption).reduce((a, b) => a + b, 0) || 1;
+                    const colors = { adopt: '#10b981', reject: '#ef4444', pending: '#f59e0b' };
+                    return Object.entries(analyticsData.gateAdoption).map(([k, v]) => {
+                      const pct = (v / total) * 100;
+                      return (
+                        <div key={k} style={{ marginBottom: 6 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: 2 }}>
+                            <span>{t(`analytics.gate_${k}`)}</span><span>{v}</span>
+                          </div>
+                          <div style={{ background: 'var(--border)', height: 6 }}>
+                            <div style={{ background: colors[k] || 'var(--accent)', height: 6, width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+
+                {analyticsData.confidenceByAgent && Object.keys(analyticsData.confidenceByAgent).length > 0 && (
+                  <div className="card" style={{ gridColumn: '1 / -1' }}>
+                    <h3 style={{ fontSize: '0.85rem', marginBottom: '0.6rem' }}>{t('analytics.conf_by_agent')}</h3>
+                    <table style={{ width: '100%', fontSize: '0.83rem', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                          <th style={{ textAlign: 'left', padding: '4px 8px' }}>{t('analytics.agent_col')}</th>
+                          <th style={{ padding: '4px 8px' }}>{t('analytics.conf_high')}</th>
+                          <th style={{ padding: '4px 8px' }}>{t('analytics.conf_medium')}</th>
+                          <th style={{ padding: '4px 8px' }}>{t('analytics.conf_low')}</th>
+                          <th style={{ padding: '4px 8px' }}>{t('analytics.conf_untagged')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(analyticsData.confidenceByAgent).map(([role, mix]) => (
+                          <tr key={role} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '4px 8px' }}><strong>{role}</strong></td>
+                            <td style={{ textAlign: 'center' }}>{mix.high || 0}</td>
+                            <td style={{ textAlign: 'center' }}>{mix.medium || 0}</td>
+                            <td style={{ textAlign: 'center' }}>{mix.low || 0}</td>
+                            <td style={{ textAlign: 'center', color: 'var(--secondary)' }}>{mix.untagged || 0}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p style={{ color: 'var(--secondary)' }}>{t('analytics.loading')}</p>
+            )}
+          </div>
         ) : activeTab === 'knowledge' ? (
           <div className="knowledge-base">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -1236,6 +1451,23 @@ function App() {
                   )}
                 </div>
 
+                {similarDecisions.length > 0 && (
+                  <div className="card" style={{ marginBottom: '1.25rem', background: 'var(--soft-bg)' }}>
+                    <h3 style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>📚 {t('similar.heading')}</h3>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--secondary)', marginBottom: '0.6rem' }}>{t('similar.intro')}</p>
+                    {similarDecisions.map(d => (
+                      <div key={d.id} style={{ borderLeft: '3px solid var(--accent)', paddingLeft: 8, marginBottom: 8 }}>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--secondary)', marginBottom: 2 }}>
+                          {new Date(d.created_at).toLocaleDateString(dateLocale)} · {getThemeLabel(d.theme_type)} · 類似度 {(d.similarity * 100).toFixed(0)}%
+                        </div>
+                        <div style={{ fontSize: '0.82rem', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                          {(d.decision_summary || '').slice(0, 240)}{(d.decision_summary || '').length > 240 ? '…' : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                   <h3 style={{ fontSize: '0.95rem' }}>{t('themes.select_heading')}</h3>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -1533,6 +1765,49 @@ function App() {
           </div>
         )}
       </div>
+
+      {newsModalOpen ? (
+        <div onClick={() => setNewsModalOpen(false)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'var(--card)', color: 'var(--card-foreground)', borderRadius: 6,
+            padding: '1.5rem 1.75rem', maxWidth: 600, width: '94vw', maxHeight: '85vh',
+            overflowY: 'auto', boxShadow: '0 20px 50px rgba(0,0,0,0.18)',
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: '0.5rem' }}>📰 {t('news.modal_title')}</h3>
+            <p style={{ color: 'var(--secondary)', fontSize: '0.85rem', lineHeight: 1.55, marginBottom: '0.75rem' }}>
+              {t('news.modal_intro')}
+            </p>
+            <textarea value={newsText} onChange={e => setNewsText(e.target.value)}
+              placeholder={t('news.placeholder')}
+              style={{ width: '100%', minHeight: 140, marginBottom: '0.75rem' }} />
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button className="btn btn-primary" onClick={analyzeNews} disabled={isAnalyzingNews || !newsText.trim()}>
+                {isAnalyzingNews ? t('news.analyzing') : t('news.analyze')}
+              </button>
+              <button className="btn" onClick={() => { setNewsModalOpen(false); setNewsText(''); setNewsSuggestion(null); }}>
+                {t('news.cancel')}
+              </button>
+            </div>
+            {newsSuggestion ? (
+              <div style={{ marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                <h4 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>{t('news.preview_title')}</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '4px 12px', fontSize: '0.85rem' }}>
+                  <strong>{t('news.field_name')}</strong><span>{newsSuggestion.project_name}</span>
+                  <strong>{t('news.field_summary')}</strong><span>{newsSuggestion.project_summary}</span>
+                  <strong>{t('news.field_theme')}</strong><span>{newsSuggestion.recommended_theme}</span>
+                  <strong>{t('news.field_focus')}</strong><span>{newsSuggestion.focus_points}</span>
+                </div>
+                <div style={{ marginTop: '0.75rem' }}>
+                  <button className="btn btn-primary" onClick={applyNewsSuggestion}>{t('news.apply')}</button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {meetingDesign ? (
         <div

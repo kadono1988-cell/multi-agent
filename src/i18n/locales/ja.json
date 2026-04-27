@@ -23,7 +23,48 @@
   "nav": {
     "dashboard": "ダッシュボード",
     "agents": "専門家チーム設定",
-    "knowledge": "知見・過去事例"
+    "knowledge": "知見・過去事例",
+    "analytics": "アナリティクス"
+  },
+  "similar": {
+    "heading": "類似する過去の判断",
+    "intro": "このプロジェクトに似た過去の意思決定が見つかりました。"
+  },
+  "news": {
+    "button": "ニュースから議題を起こす",
+    "modal_title": "ニュース記事から議題を生成",
+    "modal_intro": "ニュース記事や業界動向のテキストを貼り付けると、AI がプロジェクト・テーマ・論点を提案します。",
+    "placeholder": "ニュース原文や要約をここに貼り付け…",
+    "analyze": "🔍 解析",
+    "analyzing": "解析中…",
+    "cancel": "キャンセル",
+    "failed": "ニュースから議題を抽出できませんでした",
+    "preview_title": "AI が提案した議題",
+    "field_name": "プロジェクト名",
+    "field_summary": "概要",
+    "field_theme": "推奨テーマ",
+    "field_focus": "重視論点",
+    "apply": "✓ プロジェクトを作成して開始"
+  },
+  "analytics": {
+    "heading": "意思決定アナリティクス",
+    "intro": "今までの議論から、判断の傾向と確信度のパターンを可視化します。",
+    "loading": "読み込み中…",
+    "no_data": "データがまだありません",
+    "sessions_heading": "総セッション数",
+    "completed_label": "完了:",
+    "by_theme_heading": "テーマ別",
+    "confidence_heading": "確信度ミックス",
+    "gate_heading": "最終決定の採択",
+    "conf_by_agent": "エージェント別 確信度",
+    "agent_col": "エージェント",
+    "conf_high": "高",
+    "conf_medium": "中",
+    "conf_low": "低",
+    "conf_untagged": "未付与",
+    "gate_adopt": "採用",
+    "gate_reject": "却下",
+    "gate_pending": "保留"
   },
   "projects": {
     "list_heading": "プロジェクト一覧",
