@@ -203,7 +203,9 @@
     "thinking_suffix": "が思考中",
     "history_heading": "過去の議論履歴",
     "view_history": "閲覧 →",
-    "resume_session": "▶ 続きから"
+    "resume_session": "▶ 続きから",
+    "delete": "セッションを削除",
+    "delete_confirm": "このセッションを削除しますか？復元できません。"
   },
   "auth": {
     "sign_in": "サインイン",
@@ -213,7 +215,10 @@
     "send_link": "ログインリンクを送る",
     "sending": "送信中…",
     "cancel": "キャンセル",
-    "sent_msg": "メールを確認してリンクをクリックしてください"
+    "sent_msg": "メールを確認してリンクをクリックしてください",
+    "private_on": "自分のみ",
+    "private_off": "全員に公開",
+    "private_mode_hint": "プライベートモード切替: ON で自分が作成したプロジェクトのみ表示"
   },
   "briefing": {
     "section_title": "事前ブリーフィング (任意)",

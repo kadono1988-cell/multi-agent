@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import './index.css'
 import { supabase } from './lib/supabase'
-import { generateAgentResponseStream, generateAgentResponse, synthesizeDecisionMemo, suggestMeetingDesign, summarizeProgress, embedText, fetchSimilarDecisions, suggestTopicFromNews, generateBriefing, extractConfidence, AGENT_ROLES } from './lib/gemini'
+import { generateAgentResponseStream, synthesizeDecisionMemo, suggestMeetingDesign, summarizeProgress, embedText, fetchSimilarDecisions, suggestTopicFromNews, generateBriefing, extractConfidence, AGENT_ROLES } from './lib/gemini'
 import { getRoundConfig } from './lib/roundConfig'
 import { loadAgents, saveAgentToStorage, deleteAgentFromStorage } from './lib/agents_manager'
-import { MOCK_PROJECTS, MOCK_MESSAGES } from './lib/mockData'
+import { MOCK_PROJECTS, MOCK_MESSAGES, MOCK_BRIEFING, MOCK_DESIGN, MOCK_LIVE_SUMMARY, MOCK_NEWS_TOPIC } from './lib/mockData'
 import {
   Layout, MessageSquare, PlusCircle, BookOpen,
   Users, Save, Trash2, Download, History, Sun, Moon, Upload, BarChart3
@@ -100,9 +100,11 @@ function App() {
   const [isAnalyzingNews, setIsAnalyzingNews] = useState(false)
   const [analyticsData, setAnalyticsData] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
-  const [briefingMode, setBriefingMode] = useState(false)
   const [briefingDoc, setBriefingDoc] = useState(null)
   const [isBriefingLoading, setIsBriefingLoading] = useState(false)
+  const [privateMode, setPrivateMode] = useState(() =>
+    typeof window !== 'undefined' && localStorage.getItem('mads_private_mode') === '1'
+  )
   const [liveSummary, setLiveSummary] = useState(null)
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [projectStatusMap, setProjectStatusMap] = useState({})
@@ -171,6 +173,11 @@ function App() {
     });
     return () => sub?.subscription?.unsubscribe?.();
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('mads_private_mode', privateMode ? '1' : '0');
+    if (!isDemo) fetchProjects();
+  }, [privateMode, currentUser?.id]);
 
   // ── Initialization ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -250,7 +257,12 @@ function App() {
   };
 
   const fetchProjects = async () => {
-    const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+    let q = supabase.from('projects').select('*').order('created_at', { ascending: false });
+    // Private mode: only my own projects + legacy public (owner_id IS NULL)
+    if (privateMode && currentUser?.id) {
+      q = q.or(`owner_id.eq.${currentUser.id},owner_id.is.null`);
+    }
+    const { data } = await q;
     if (data) {
       setProjects(data);
       // Fetch latest session status per project for the sidebar progress badge
@@ -310,6 +322,11 @@ function App() {
     if (!activeProject || isDesigning) return;
     setIsDesigning(true);
     try {
+      if (isDemo) {
+        await new Promise(r => setTimeout(r, 500));
+        setMeetingDesign(MOCK_DESIGN);
+        return;
+      }
       const design = await suggestMeetingDesign({
         project: activeProject,
         agents: customAgents,
@@ -394,6 +411,11 @@ function App() {
     if (!newsText.trim() || isAnalyzingNews) return;
     setIsAnalyzingNews(true);
     try {
+      if (isDemo) {
+        await new Promise(r => setTimeout(r, 600));
+        setNewsSuggestion(MOCK_NEWS_TOPIC);
+        return;
+      }
       const sug = await suggestTopicFromNews({
         newsText,
         locale: i18n.resolvedLanguage === 'en' ? 'en' : 'ja',
@@ -439,8 +461,16 @@ function App() {
       setAnalyticsData({ totalSessions: 0, completed: 0, byTheme: {}, confidenceMix: {}, gateAdoption: {} });
       return;
     }
-    const { data: sessions } = await supabase.from('decision_sessions').select('status, theme_type, gate_responses, created_at, max_rounds');
-    const { data: msgs }     = await supabase.from('agent_messages').select('agent_role, confidence, round_number');
+    let sessions = null, msgs = null;
+    try {
+      const r1 = await supabase.from('decision_sessions').select('status, theme_type, gate_responses, created_at, max_rounds');
+      const r2 = await supabase.from('agent_messages').select('agent_role, confidence, round_number');
+      sessions = r1.data; msgs = r2.data;
+    } catch (err) {
+      console.warn('[analytics] fetch failed:', err);
+      setAnalyticsData({ totalSessions: 0, completed: 0, byTheme: {}, confidenceMix: {}, gateAdoption: {} });
+      return;
+    }
 
     const totalSessions = sessions?.length || 0;
     const completed = sessions?.filter(s => s.status === 'completed').length || 0;
@@ -518,6 +548,11 @@ function App() {
     if (!activeProject || isBriefingLoading) return;
     setIsBriefingLoading(true);
     try {
+      if (isDemo) {
+        await new Promise(r => setTimeout(r, 600));
+        setBriefingDoc(MOCK_BRIEFING);
+        return;
+      }
       const brief = await generateBriefing({
         project: activeProject,
         setupContext: {
@@ -538,6 +573,11 @@ function App() {
     if (!session || messages.length === 0 || isSummarizing) return;
     setIsSummarizing(true);
     try {
+      if (isDemo) {
+        await new Promise(r => setTimeout(r, 400));
+        setLiveSummary(MOCK_LIVE_SUMMARY);
+        return;
+      }
       const sum = await summarizeProgress({
         messages,
         locale: i18n.resolvedLanguage === 'en' ? 'en' : 'ja',
@@ -760,11 +800,28 @@ function App() {
   // Record HITL gate decision (採用/却下/保留) to the session JSONB.
   const recordGateDecision = async (gate, decision) => {
     setGateOpen(null);
-    if (isDemo || !session?.id) return;
-    const existing = session.gate_responses || {};
-    const next = { ...existing, [gate]: { decision, at: new Date().toISOString() } };
-    await supabase.from('decision_sessions').update({ gate_responses: next }).eq('id', session.id);
-    setSession(prev => prev ? { ...prev, gate_responses: next } : prev);
+    if (!isDemo && session?.id) {
+      const existing = session.gate_responses || {};
+      const next = { ...existing, [gate]: { decision, at: new Date().toISOString() } };
+      await supabase.from('decision_sessions').update({ gate_responses: next }).eq('id', session.id);
+      setSession(prev => prev ? { ...prev, gate_responses: next } : prev);
+    }
+
+    // r1 + "edit_setup": send the user back to the theme picker but keep all
+    // setup state so they can tweak focus_points / participants / depth and
+    // restart. The current session is abandoned.
+    if (gate === 'r1' && decision === 'edit_setup') {
+      if (!isDemo && session?.id) {
+        await supabase.from('decision_sessions').update({ status: 'archived' }).eq('id', session.id);
+      }
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      setSession(null);
+      setMessages([]);
+      setCurrentRound(0);
+      setStreamingContent(null);
+      setLiveSummary(null);
+      setSetupTheme(null); // returns to project detail / theme picker
+    }
   };
 
   const submitUserInput = async () => {
@@ -902,26 +959,38 @@ function App() {
   const createOrUpdateProject = async () => {
     if (!projectForm.name) return alert(t('projects.name_required'));
     setLoading(true);
-    const formWithOwner = projectForm.id ? projectForm : { ...projectForm, owner_id: currentUser?.id || null };
-    const { data } = await supabase.from('projects').upsert(formWithOwner).select().single();
-    if (data) {
-      await fetchProjects();
-      setActiveProject(data);
-      setIsEditingProject(false);
+    try {
+      const formWithOwner = projectForm.id ? projectForm : { ...projectForm, owner_id: currentUser?.id || null };
+      const { data, error } = await supabase.from('projects').upsert(formWithOwner).select().single();
+      if (error) throw error;
+      if (data) {
+        await fetchProjects();
+        setActiveProject(data);
+        setIsEditingProject(false);
+      }
+    } catch (err) {
+      alert(`Save failed: ${err.message || err}`);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const deleteProject = async () => {
     if (!activeProject) return;
     if (!confirm(t('projects.delete_confirm', { name: activeProject.name }))) return;
     setLoading(true);
-    await supabase.from('projects').delete().eq('id', activeProject.id);
-    setActiveProject(null);
-    setIsEditingProject(false);
-    resetSession();
-    await fetchProjects();
-    setLoading(false);
+    try {
+      const { error } = await supabase.from('projects').delete().eq('id', activeProject.id);
+      if (error) throw error;
+      setActiveProject(null);
+      setIsEditingProject(false);
+      resetSession();
+      await fetchProjects();
+    } catch (err) {
+      alert(`Delete failed: ${err.message || err}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ── Knowledge base CRUD ──────────────────────────────────────────────────────
@@ -972,6 +1041,13 @@ function App() {
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
           <AuthBar t={t} />
+          {currentUser ? (
+            <button className="btn-icon" style={{ fontSize: '0.78rem' }}
+              onClick={() => setPrivateMode(p => !p)}
+              title={t('auth.private_mode_hint')}>
+              {privateMode ? '🔒' : '🌐'} {privateMode ? t('auth.private_on') : t('auth.private_off')}
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -1660,9 +1736,12 @@ function App() {
                           <div
                             key={s.id}
                             className="history-item"
-                            onClick={() => incomplete ? resumeSession(s) : viewHistorySession(s)}
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}
                           >
-                            <div>
+                            <div
+                              style={{ flex: 1, cursor: 'pointer' }}
+                              onClick={() => incomplete ? resumeSession(s) : viewHistorySession(s)}
+                            >
                               <span className="history-theme">{getThemeLabel(s.theme_type)}</span>
                               <span className="history-date">
                                 {new Date(s.created_at).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -1672,6 +1751,19 @@ function App() {
                             <span style={{ color: incomplete ? 'var(--accent)' : 'var(--secondary)', fontSize: '0.8rem' }}>
                               {incomplete ? t('session.resume_session') : t('session.view_history')}
                             </span>
+                            <button
+                              className="btn-icon"
+                              style={{ fontSize: '0.75rem', opacity: 0.6 }}
+                              title={t('session.delete')}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (!confirm(t('session.delete_confirm'))) return;
+                                await supabase.from('decision_sessions').delete().eq('id', s.id);
+                                if (activeProject) loadSessionHistory(activeProject.id);
+                              }}
+                            >
+                              🗑
+                            </button>
                           </div>
                         );
                       })}

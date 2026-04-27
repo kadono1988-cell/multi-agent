@@ -139,7 +139,7 @@ export const saveAgentToStorage = async (agent) => {
       is_active: agent.is_active
     };
     await supabase.from('expert_agents').upsert(dbData, { onConflict: 'agent_id' });
-  } catch (e) {
+  } catch {
     console.warn("Supabase Sync Failed, using local only");
   }
   return current;
@@ -149,9 +149,11 @@ export const deleteAgentFromStorage = async (agentId) => {
   const current = await loadAgents();
   delete current[agentId];
   localStorage.setItem('expert_agents', JSON.stringify(current));
-  
+
   try {
     await supabase.from('expert_agents').delete().eq('agent_id', agentId);
-  } catch (e) {}
+  } catch {
+    // Local delete still happened; remote sync failures are non-fatal.
+  }
   return current;
 };

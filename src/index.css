@@ -174,6 +174,59 @@ header {
     right: 20px;
     bottom: 20px;
   }
+  /* Drop the right panel onto the bottom of main on tablets so the chat
+     timeline can use the full content width. */
+  .app-container {
+    grid-template-columns: 220px 1fr;
+  }
+  .right-panel {
+    grid-column: 1 / -1;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    max-height: 360px;
+  }
+}
+
+@media (max-width: 720px) {
+  /* Phones: collapse the sidebar above main content. The user navigates by
+     scrolling rather than a drawer (cheaper than a hamburger UI). */
+  .app-container {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100vh;
+  }
+  .sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    max-height: 240px;
+  }
+  .main-content {
+    padding: 1rem;
+  }
+  .right-panel {
+    padding: 1rem;
+    max-height: none;
+  }
+  header {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 12px;
+    gap: 4px;
+  }
+  .logo {
+    flex-wrap: wrap;
+    font-size: 1rem;
+  }
+  .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .floating-next-round,
+  .floating-download-memo {
+    right: 12px;
+    bottom: 12px;
+    font-size: 0.85rem;
+    padding: 0.6rem 1rem;
+  }
 }
 
 /* Discussion Styles */

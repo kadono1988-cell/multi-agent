@@ -271,3 +271,40 @@ export const MOCK_MESSAGES = {
     }
   ]
 };
+
+// ── Demo-mode fallbacks for the AI helpers ────────────────────────────────
+export const MOCK_BRIEFING = {
+  executive_brief: '【デモ】銀座再開発で工期3ヶ月遅延。違約金リスクと夜間作業コストのトレードオフが最大の論点。',
+  factual_baseline: ['延床18,500m² の大規模再開発', '違約金条項あり (推定 8,000万 - 1.2億円)', '近隣に高級ブランド店舗が密集'],
+  open_questions: ['夜間作業に必要な許可は何種類か？', '発注者の費用分担意向は？', '住民同意取得の現実的タイムライン'],
+  evidence_from_cases: ['2023年 渋谷再開発: 段階的夜間作業で 78% の住民合意を得て遅延 5週圧縮', '2022年 新宿: 全面夜間作業で訴訟リスクが顕在化'],
+  decision_criteria: ['遅延コスト vs 夜間作業コスト', '住民関係性 (10年後の事業継続性)', '保険カバレッジの確実性'],
+};
+
+export const MOCK_DESIGN = {
+  recommended_theme: 'delay',
+  recommended_rounds: 5,
+  focus_points: '住民対応コストと違約金回避を両立する「段階的夜間作業」の実現可能性を中心に議論。',
+  key_risks: ['住民訴訟リスク', '保険免責事項の網羅性', '発注者交渉決裂', '工期再延長の連鎖'],
+  missing_information: ['住民代表との既往対話履歴', '保険約款の特約条項', '発注者の議会承認スケジュール'],
+  estimated_minutes: 25,
+};
+
+export const MOCK_LIVE_SUMMARY = {
+  current_focus: 'デモ: 夜間作業の許可取得スキームと住民同意の現実性',
+  tentative_agreements: 'デモ: 発注者との費用折半交渉が前提・段階的アプローチを採用',
+  open_tensions: 'デモ: 全面夜間 vs 段階導入で COO と PM が対立',
+};
+
+export const MOCK_NEWS_TOPIC = {
+  project_name: '【デモ】建設業界2025年労務単価改訂への対応',
+  project_summary: '2025年4月に労務単価が平均6.8%改定される見込み。既存プロジェクトの請負金額への影響と、今後の入札戦略を再設計する必要がある。',
+  project_type: 'Industrial',
+  strategic_importance: 'high',
+  recommended_theme: 'go_no_go',
+  focus_points: '物価スライド条項の活用範囲と、発注者との改定交渉タイミング',
+  user_context: '労務単価改訂が既存案件の粗利を圧迫する見込み。対応方針を決めたい。',
+  constraints: '既契約は物価スライド条項の発動タイミングが限定される',
+  goal: '改定影響額の試算と交渉シナリオの優先順位付け',
+};
+

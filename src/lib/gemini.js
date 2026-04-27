@@ -250,12 +250,14 @@ function legacyRoundType(round) {
   return 'feedback';
 }
 
-// Parse `[確信度: 高/中/低]` (or English variants) from response trailing line.
+// Parse `[確信度: 高/中/低]` (or English variants) from the trailing line of
+// the response. Strict end-of-string anchor — a tag in the middle is ignored
+// to prevent false positives from quoted material.
 // Returns { confidence: 'high'|'medium'|'low'|null, cleaned: string }.
 export function extractConfidence(content) {
   if (!content) return { confidence: null, cleaned: content };
-  const re = /\[?\s*確信度\s*[:：]\s*(高|中|低)\s*\]?\s*$/m;
-  const enRe = /\[?\s*confidence\s*[:：]\s*(high|medium|low)\s*\]?\s*$/im;
+  const re   = /\[?\s*確信度\s*[:：]\s*(高|中|低)\s*\]?\s*$/;
+  const enRe = /\[?\s*confidence\s*[:：]\s*(high|medium|low)\s*\]?\s*$/i;
   const m = content.match(re);
   if (m) {
     const map = { '高': 'high', '中': 'medium', '低': 'low' };

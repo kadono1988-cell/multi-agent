@@ -203,7 +203,9 @@
     "thinking_suffix": " is thinking",
     "history_heading": "Past discussions",
     "view_history": "View →",
-    "resume_session": "▶ Resume"
+    "resume_session": "▶ Resume",
+    "delete": "Delete session",
+    "delete_confirm": "Delete this session? This cannot be undone."
   },
   "auth": {
     "sign_in": "Sign in",
@@ -213,7 +215,10 @@
     "send_link": "Send login link",
     "sending": "Sending...",
     "cancel": "Cancel",
-    "sent_msg": "Check your inbox and click the link"
+    "sent_msg": "Check your inbox and click the link",
+    "private_on": "Mine only",
+    "private_off": "Public",
+    "private_mode_hint": "Private mode: only show projects you created"
   },
   "briefing": {
     "section_title": "Pre-meeting briefing (optional)",
