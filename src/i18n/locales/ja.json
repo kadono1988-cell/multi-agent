@@ -129,6 +129,7 @@
     "next_round": "Round {{n}} へ →",
     "generating": "⏳ 生成中…",
     "download_memo": "議論メモをDL",
+    "generating_memo": "⏳ レポート生成中…",
     "thinking_suffix": "が思考中",
     "history_heading": "過去の議論履歴",
     "view_history": "閲覧 →"
@@ -177,15 +178,35 @@
     "delete_case_confirm": "この事例を削除しますか？"
   },
   "summary_export": {
-    "title": "建設意思決定支援プラットフォーム — 議論サマリー",
+    "title": "建設意思決定支援プラットフォーム — 議事録レポート",
     "subtitle": "PM / CFO / COO / CEO 4エージェントによる意思決定議論の記録",
     "section_setup": "▌ セットアップ情報",
+    "section_cover_summary": "▌ エグゼクティブサマリー",
+    "section_structured_body": "▌ 構造化本体",
+    "section_appendix": "—  APPENDIX  —",
+    "section_transcript": "▌ Round別 生発言ログ",
     "footer": "生成日時: {{date}}  —  Construction Multi-Agent Decision System",
     "label_project": "プロジェクト",
     "label_client": "施主",
     "label_budget": "予算",
     "label_theme": "テーマ",
     "label_date": "実施日",
-    "unset": "未設定"
+    "unset": "未設定",
+    "report_executive_summary": "概要",
+    "report_conclusion": "結論",
+    "report_discussion_points": "主要論点",
+    "report_agreements": "合意事項",
+    "report_disagreements": "対立・未解決論点",
+    "report_final_decision": "最終決定と判断根拠",
+    "report_action_items": "実行指示 (Action Items)",
+    "report_col_owner": "担当",
+    "report_col_task": "タスク",
+    "report_col_due": "期限",
+    "report_empty_points": "議論中に明確な論点は抽出されませんでした。",
+    "report_empty_agreements": "合意に至った事項はありません。",
+    "report_empty_disagreements": "対立・未解決の論点はありません。",
+    "report_empty_rationale": "判断根拠は記録されていません。",
+    "report_empty_actions": "実行指示は記録されていません。",
+    "report_unavailable": "AIによる構造化レポートを生成できませんでした。Appendixの生発言ログをご参照ください。"
   }
 }

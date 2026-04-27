@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import './index.css'
 import { supabase } from './lib/supabase'
-import { generateAgentResponseStream, generateAgentResponse, AGENT_ROLES } from './lib/gemini'
+import { generateAgentResponseStream, generateAgentResponse, synthesizeDecisionMemo, AGENT_ROLES } from './lib/gemini'
 import { loadAgents, saveAgentToStorage, deleteAgentFromStorage } from './lib/agents_manager'
 import { MOCK_PROJECTS, MOCK_MESSAGES } from './lib/mockData'
 import {
@@ -55,6 +55,7 @@ function App() {
 
   // ── Streaming state ─────────────────────────────────────────────────────────
   const [streamingContent, setStreamingContent] = useState(null)
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
   const timelineEndRef = useRef(null)
 
   // ── Agents & Knowledge ──────────────────────────────────────────────────────
@@ -391,55 +392,88 @@ function App() {
   // ── Download ─────────────────────────────────────────────────────────────────
   const downloadSessionSummary = async () => {
     if (!activeProject || !session || messages.length === 0) return;
+    if (isGeneratingPdf) return;
 
+    setIsGeneratingPdf(true);
     try {
-      const [{ pdf }, { SessionPDF }] = await Promise.all([
+      const setupBundle = {
+        user_context: setupContext,
+        constraints: setupConstraints,
+        goal: setupGoal,
+        focus_points: setupFocusPoints,
+        prfaq: setupPrfaq,
+      };
+
+      // 1. Synthesize structured report (parallel with dynamic imports)
+      const [{ pdf }, { SessionPDF }, report] = await Promise.all([
         import('@react-pdf/renderer'),
         import('./lib/SessionPDF.jsx'),
+        synthesizeDecisionMemo({
+          project: activeProject,
+          session,
+          messages,
+          setupContext: setupBundle,
+          locale: i18n.resolvedLanguage === 'en' ? 'en' : 'ja',
+        }),
       ]);
 
-    const labels = {
-      title: t('summary_export.title'),
-      subtitle: t('summary_export.subtitle'),
-      locale: dateLocale,
-      meta: {
-        project: t('summary_export.label_project'),
-        client: t('summary_export.label_client'),
-        budget: t('summary_export.label_budget'),
-        theme: t('summary_export.label_theme'),
-        date: t('summary_export.label_date'),
-      },
-      sections: {
-        setup: t('summary_export.section_setup'),
-      },
-      setup: {
-        user_context: t('setup.context_label'),
-        constraints: t('setup.constraints_label'),
-        goal: t('setup.goal_label'),
-        focus_points: t('setup.focus_points_label'),
-        prfaq: t('setup.prfaq_label'),
-      },
-      round_prefix: 'Round',
-      footer: t('summary_export.footer', { date: new Date().toLocaleString(dateLocale) }),
-    };
+      const labels = {
+        title: t('summary_export.title'),
+        subtitle: t('summary_export.subtitle'),
+        locale: dateLocale,
+        meta: {
+          project: t('summary_export.label_project'),
+          client: t('summary_export.label_client'),
+          budget: t('summary_export.label_budget'),
+          theme: t('summary_export.label_theme'),
+          date: t('summary_export.label_date'),
+        },
+        sections: {
+          setup: t('summary_export.section_setup'),
+          cover_summary: t('summary_export.section_cover_summary'),
+          structured_body: t('summary_export.section_structured_body'),
+          appendix: t('summary_export.section_appendix'),
+          transcript: t('summary_export.section_transcript'),
+        },
+        setup: {
+          user_context: t('setup.context_label'),
+          constraints: t('setup.constraints_label'),
+          goal: t('setup.goal_label'),
+          focus_points: t('setup.focus_points_label'),
+          prfaq: t('setup.prfaq_label'),
+        },
+        report: {
+          executive_summary: t('summary_export.report_executive_summary'),
+          conclusion: t('summary_export.report_conclusion'),
+          discussion_points: t('summary_export.report_discussion_points'),
+          agreements: t('summary_export.report_agreements'),
+          disagreements: t('summary_export.report_disagreements'),
+          final_decision: t('summary_export.report_final_decision'),
+          action_items: t('summary_export.report_action_items'),
+          col_owner: t('summary_export.report_col_owner'),
+          col_task: t('summary_export.report_col_task'),
+          col_due: t('summary_export.report_col_due'),
+          empty_points: t('summary_export.report_empty_points'),
+          empty_agreements: t('summary_export.report_empty_agreements'),
+          empty_disagreements: t('summary_export.report_empty_disagreements'),
+          empty_rationale: t('summary_export.report_empty_rationale'),
+          empty_actions: t('summary_export.report_empty_actions'),
+          unavailable: t('summary_export.report_unavailable'),
+        },
+        round_prefix: 'Round',
+        footer: t('summary_export.footer', { date: new Date().toLocaleString(dateLocale) }),
+      };
 
-    const setupBundle = {
-      user_context: setupContext,
-      constraints: setupConstraints,
-      goal: setupGoal,
-      focus_points: setupFocusPoints,
-      prfaq: setupPrfaq,
-    };
-
-    const doc = (
-      <SessionPDF
-        project={activeProject}
-        session={session}
-        messages={messages}
-        setupContext={setupBundle}
-        labels={labels}
-      />
-    );
+      const doc = (
+        <SessionPDF
+          project={activeProject}
+          session={session}
+          messages={messages}
+          setupContext={setupBundle}
+          labels={labels}
+          report={report}
+        />
+      );
 
       const blob = await pdf(doc).toBlob();
       const safeName = activeProject.name.replace(/[<>:"/\\|?*]/g, '_');
@@ -455,6 +489,8 @@ function App() {
     } catch (err) {
       console.error('PDF generation failed:', err);
       alert(`PDF生成に失敗しました: ${err?.message || err}`);
+    } finally {
+      setIsGeneratingPdf(false);
     }
   };
 
@@ -1043,9 +1079,10 @@ function App() {
               <button
                 className="btn floating-download-memo"
                 onClick={downloadSessionSummary}
+                disabled={isGeneratingPdf}
                 aria-label={t('session.download_memo')}
               >
-                <Download size={16} /> {t('session.download_memo')}
+                <Download size={16} /> {isGeneratingPdf ? t('session.generating_memo') : t('session.download_memo')}
               </button>
             )}
           </div>

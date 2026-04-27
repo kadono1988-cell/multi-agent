@@ -61,7 +61,7 @@ const sampleMessages = [
 ];
 
 const labels = {
-  title: "建設意思決定支援プラットフォーム — 議論サマリー",
+  title: "建設意思決定支援プラットフォーム — 議事録レポート",
   subtitle: "PM / CFO / COO / CEO 4エージェントによる意思決定議論の記録",
   locale: "ja-JP",
   meta: {
@@ -71,7 +71,13 @@ const labels = {
     theme: "テーマ",
     date: "実施日",
   },
-  sections: { setup: "▌ セットアップ情報" },
+  sections: {
+    setup: "▌ セットアップ情報",
+    cover_summary: "▌ エグゼクティブサマリー",
+    structured_body: "▌ 構造化本体",
+    appendix: "—  APPENDIX  —",
+    transcript: "▌ Round別 生発言ログ",
+  },
   setup: {
     user_context: "相談内容",
     constraints: "制約事項",
@@ -79,8 +85,61 @@ const labels = {
     focus_points: "特に重視してほしい視点 (論点設定)",
     prfaq: "PRFAQ (完成時のニュース記事 + 想定FAQ)",
   },
+  report: {
+    executive_summary: "概要",
+    conclusion: "結論",
+    discussion_points: "主要論点",
+    agreements: "合意事項",
+    disagreements: "対立・未解決論点",
+    final_decision: "最終決定と判断根拠",
+    action_items: "実行指示 (Action Items)",
+    col_owner: "担当",
+    col_task: "タスク",
+    col_due: "期限",
+    empty_points: "議論中に明確な論点は抽出されませんでした。",
+    empty_agreements: "合意に至った事項はありません。",
+    empty_disagreements: "対立・未解決の論点はありません。",
+    empty_rationale: "判断根拠は記録されていません。",
+    empty_actions: "実行指示は記録されていません。",
+    unavailable: "AIによる構造化レポートを生成できませんでした。",
+  },
   round_prefix: "Round",
   footer: `生成日時: ${new Date().toLocaleString("ja-JP")}  —  Construction Multi-Agent Decision System`,
+};
+
+const sampleReport = {
+  executive_summary: "湾岸タワーマンション建替えにおいて鉄骨納期が8週遅延した。販売開始時期(6月)を厳守する制約のもと、国内メーカーへの一部切替と工区割見直しの併用で最終遅延を3週間以内に圧縮する方針で合意。追加コストは発注者と折半交渉する前提で進める。",
+  conclusion: "国内メーカーへの一部切替＋工区割見直しの併用案を採用。追加コスト2億円以内・遅延3週間以内を達成目標とする。",
+  discussion_points: [
+    "国内メーカーへの発注切替の実現可能性と品質確保",
+    "工区割見直しによる作業動線の安全性",
+    "プレハブ化との比較におけるNPV評価",
+    "発注者X社との信頼関係維持と販売開始時期厳守",
+    "追加コスト負担の折半交渉余地",
+  ],
+  agreements: [
+    "販売開始時期(6月)を最優先制約とする",
+    "セカンドソース確保は必須",
+    "追加コスト2億円を上限とする",
+  ],
+  disagreements: [
+    "プレハブ化採用範囲: PM=限定的 / COO=積極導入を主張",
+    "国内メーカー品質評価の独立監査要否: CFO=必要 / PM=既存実績で十分",
+  ],
+  final_decision: {
+    headline: "国内メーカー切替 + 工区割見直し併用案を採用",
+    rationale: [
+      "過去事例で同条件で遅延3週間圧縮の実績あり",
+      "プレハブ化単独は高層階の安全性リスクが残る",
+      "発注者X社と折半交渉できる関係性が確保されている",
+    ],
+  },
+  action_items: [
+    { owner: "PM", task: "国内メーカー2社へ即日RFQを発出", due: "今週中" },
+    { owner: "COO", task: "工区割見直し案の作業動線シミュレーションを作成", due: "10日以内" },
+    { owner: "CFO", task: "X社財務担当へ折半交渉の事前打診", due: "5営業日以内" },
+    { owner: "CEO", task: "X社経営層へ進捗を週次報告", due: "毎週金曜" },
+  ],
 };
 
 const doc = React.createElement(SessionPDF, {
@@ -95,6 +154,7 @@ const doc = React.createElement(SessionPDF, {
     prfaq: "# ニュース記事\n見出し: X社のタワーマンション、計画通り販売開始\n本文: セカンドソース確保で遅延圧縮\n\n# FAQ\nQ: 最大の価値は?\nA: 販売開始時期厳守",
   },
   labels,
+  report: sampleReport,
 });
 
 const outPath = path.resolve(__dirname, "..", "dist_test_session.pdf");

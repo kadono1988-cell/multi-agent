@@ -10,10 +10,17 @@ const COLORS = {
   text: "#1f2937",
   muted: "#6b7280",
   accent: "#1e40af",
+  accentSoft: "#dbeafe",
   border: "#d1d5db",
   bgSoft: "#f3f4f6",
   tableRowAlt: "#f9fafb",
   agentBar: "#1e40af",
+  positive: "#047857",
+  positiveSoft: "#d1fae5",
+  warn: "#b45309",
+  warnSoft: "#fef3c7",
+  decision: "#7c2d12",
+  decisionSoft: "#fed7aa",
 };
 
 const styles = StyleSheet.create({
@@ -40,7 +47,7 @@ const styles = StyleSheet.create({
   },
 
   metaBlock: {
-    marginBottom: 20,
+    marginBottom: 18,
     padding: 12,
     backgroundColor: COLORS.bgSoft,
     borderRadius: 4,
@@ -64,13 +71,125 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontSize: 13,
-    marginTop: 10,
-    marginBottom: 10,
+    marginTop: 14,
+    marginBottom: 8,
     paddingBottom: 4,
     borderBottomWidth: 1,
     borderBottomStyle: "solid",
     borderBottomColor: COLORS.border,
     color: COLORS.accent,
+  },
+  subsectionTitle: {
+    fontSize: 10,
+    marginTop: 8,
+    marginBottom: 4,
+    color: COLORS.muted,
+  },
+
+  paragraph: {
+    fontSize: 10,
+    lineHeight: 1.65,
+    marginBottom: 6,
+  },
+
+  bulletRow: {
+    flexDirection: "row",
+    marginBottom: 3,
+    paddingLeft: 4,
+  },
+  bulletDot: {
+    width: 10,
+    fontSize: 10,
+    color: COLORS.accent,
+  },
+  bulletText: {
+    flex: 1,
+    fontSize: 10,
+    lineHeight: 1.55,
+  },
+
+  calloutBox: {
+    padding: 10,
+    borderRadius: 4,
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  calloutSummary: {
+    backgroundColor: COLORS.accentSoft,
+    borderLeftWidth: 3,
+    borderLeftStyle: "solid",
+    borderLeftColor: COLORS.accent,
+  },
+  calloutDecision: {
+    backgroundColor: COLORS.decisionSoft,
+    borderLeftWidth: 3,
+    borderLeftStyle: "solid",
+    borderLeftColor: COLORS.decision,
+  },
+  calloutAgree: {
+    backgroundColor: COLORS.positiveSoft,
+    borderLeftWidth: 3,
+    borderLeftStyle: "solid",
+    borderLeftColor: COLORS.positive,
+  },
+  calloutWarn: {
+    backgroundColor: COLORS.warnSoft,
+    borderLeftWidth: 3,
+    borderLeftStyle: "solid",
+    borderLeftColor: COLORS.warn,
+  },
+  calloutLabel: {
+    fontSize: 9,
+    color: COLORS.muted,
+    marginBottom: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  calloutHeadline: {
+    fontSize: 11,
+    marginBottom: 4,
+    color: COLORS.text,
+  },
+
+  actionTable: {
+    marginTop: 4,
+    borderWidth: 0.5,
+    borderStyle: "solid",
+    borderColor: COLORS.border,
+    borderRadius: 3,
+  },
+  actionHeader: {
+    flexDirection: "row",
+    backgroundColor: COLORS.accent,
+    color: "#ffffff",
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    fontSize: 9,
+  },
+  actionRow: {
+    flexDirection: "row",
+    borderTopWidth: 0.5,
+    borderTopStyle: "solid",
+    borderTopColor: COLORS.border,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  actionRowAlt: {
+    backgroundColor: COLORS.tableRowAlt,
+  },
+  cellOwner: { width: 70, fontSize: 9 },
+  cellTask: { flex: 1, fontSize: 9, paddingRight: 4 },
+  cellDue: { width: 70, fontSize: 9, color: COLORS.muted },
+
+  appendixBanner: {
+    marginTop: 16,
+    marginBottom: 8,
+    padding: 6,
+    backgroundColor: COLORS.bgSoft,
+    fontSize: 11,
+    color: COLORS.muted,
+    textAlign: "center",
+    letterSpacing: 1,
   },
 
   setupField: {
@@ -94,12 +213,12 @@ const styles = StyleSheet.create({
   },
 
   roundBlock: {
-    marginTop: 20,
-    marginBottom: 8,
+    marginTop: 14,
+    marginBottom: 4,
   },
   roundHeading: {
-    fontSize: 14,
-    marginBottom: 10,
+    fontSize: 13,
+    marginBottom: 8,
     paddingTop: 4,
     paddingBottom: 4,
     paddingLeft: 10,
@@ -110,7 +229,7 @@ const styles = StyleSheet.create({
   },
 
   messageBlock: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   agentLabel: {
     fontSize: 11,
@@ -151,17 +270,14 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: COLORS.muted,
   },
-});
 
-function SetupField({ label, value, monospace = false }) {
-  if (!value || !value.trim()) return null;
-  return (
-    <View style={styles.setupField}>
-      <Text style={styles.setupLabel}>{label}</Text>
-      <Text style={monospace ? styles.prfaqValue : styles.setupValue}>{value}</Text>
-    </View>
-  );
-}
+  emptyHint: {
+    fontSize: 9,
+    color: COLORS.muted,
+    fontStyle: "italic",
+    marginBottom: 6,
+  },
+});
 
 function MetaRow({ label, value }) {
   if (!value) return null;
@@ -173,7 +289,34 @@ function MetaRow({ label, value }) {
   );
 }
 
-export function SessionPDF({ project, session, messages, setupContext, labels }) {
+function BulletList({ items, emptyHint }) {
+  const valid = (items || []).filter(x => typeof x === 'string' && x.trim());
+  if (valid.length === 0) {
+    return emptyHint ? <Text style={styles.emptyHint}>{emptyHint}</Text> : null;
+  }
+  return (
+    <View>
+      {valid.map((item, i) => (
+        <View key={i} style={styles.bulletRow} wrap={false}>
+          <Text style={styles.bulletDot}>•</Text>
+          <Text style={styles.bulletText}>{item}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function SetupField({ label, value, monospace = false }) {
+  if (!value || !value.trim()) return null;
+  return (
+    <View style={styles.setupField}>
+      <Text style={styles.setupLabel}>{label}</Text>
+      <Text style={monospace ? styles.prfaqValue : styles.setupValue}>{value}</Text>
+    </View>
+  );
+}
+
+export function SessionPDF({ project, session, messages, setupContext, labels, report }) {
   const createdAt = session?.created_at
     ? new Date(session.created_at).toLocaleString(labels.locale || "ja-JP")
     : "";
@@ -186,6 +329,10 @@ export function SessionPDF({ project, session, messages, setupContext, labels })
     setupContext.user_context || setupContext.constraints || setupContext.goal
     || setupContext.focus_points || setupContext.prfaq
   );
+
+  const r = report || null;
+  const reportLabels = labels.report || {};
+  const sectionLabels = labels.sections || {};
 
   return (
     <Document>
@@ -203,6 +350,89 @@ export function SessionPDF({ project, session, messages, setupContext, labels })
           <MetaRow label={labels.meta.date} value={createdAt} />
         </View>
 
+        {/* ── Cover Summary ─────────────────────────────────────── */}
+        {r ? (
+          <View>
+            <Text style={styles.sectionTitle}>{sectionLabels.cover_summary}</Text>
+
+            {r.executive_summary ? (
+              <View style={[styles.calloutBox, styles.calloutSummary]}>
+                <Text style={styles.calloutLabel}>{reportLabels.executive_summary}</Text>
+                <Text style={styles.paragraph}>{r.executive_summary}</Text>
+              </View>
+            ) : null}
+
+            {r.conclusion ? (
+              <View style={[styles.calloutBox, styles.calloutDecision]}>
+                <Text style={styles.calloutLabel}>{reportLabels.conclusion}</Text>
+                <Text style={styles.paragraph}>{r.conclusion}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : (
+          <View>
+            <Text style={styles.sectionTitle}>{sectionLabels.cover_summary}</Text>
+            <Text style={styles.emptyHint}>{reportLabels.unavailable}</Text>
+          </View>
+        )}
+
+        {/* ── Structured Body ───────────────────────────────────── */}
+        {r ? (
+          <View>
+            <Text style={styles.sectionTitle}>{sectionLabels.structured_body}</Text>
+
+            <Text style={styles.subsectionTitle}>{reportLabels.discussion_points}</Text>
+            <BulletList items={r.discussion_points} emptyHint={reportLabels.empty_points} />
+
+            <Text style={styles.subsectionTitle}>{reportLabels.agreements}</Text>
+            <View style={[styles.calloutBox, styles.calloutAgree]}>
+              <BulletList items={r.agreements} emptyHint={reportLabels.empty_agreements} />
+            </View>
+
+            <Text style={styles.subsectionTitle}>{reportLabels.disagreements}</Text>
+            <View style={[styles.calloutBox, styles.calloutWarn]}>
+              <BulletList items={r.disagreements} emptyHint={reportLabels.empty_disagreements} />
+            </View>
+
+            <Text style={styles.subsectionTitle}>{reportLabels.final_decision}</Text>
+            <View style={[styles.calloutBox, styles.calloutDecision]}>
+              {r.final_decision?.headline ? (
+                <Text style={styles.calloutHeadline}>{r.final_decision.headline}</Text>
+              ) : null}
+              <BulletList items={r.final_decision?.rationale} emptyHint={reportLabels.empty_rationale} />
+            </View>
+
+            <Text style={styles.subsectionTitle}>{reportLabels.action_items}</Text>
+            {(r.action_items && r.action_items.length > 0) ? (
+              <View style={styles.actionTable}>
+                <View style={styles.actionHeader}>
+                  <Text style={styles.cellOwner}>{reportLabels.col_owner}</Text>
+                  <Text style={styles.cellTask}>{reportLabels.col_task}</Text>
+                  <Text style={styles.cellDue}>{reportLabels.col_due}</Text>
+                </View>
+                {r.action_items.map((a, i) => (
+                  <View
+                    key={i}
+                    style={[styles.actionRow, i % 2 === 1 ? styles.actionRowAlt : null]}
+                    wrap={false}
+                  >
+                    <Text style={styles.cellOwner}>{a.owner || '—'}</Text>
+                    <Text style={styles.cellTask}>{a.task || '—'}</Text>
+                    <Text style={styles.cellDue}>{a.due || '—'}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.emptyHint}>{reportLabels.empty_actions}</Text>
+            )}
+          </View>
+        ) : null}
+
+        {/* ── Appendix ─────────────────────────────────────────── */}
+        <View break>
+          <Text style={styles.appendixBanner}>{sectionLabels.appendix}</Text>
+        </View>
+
         {hasSetup ? (
           <View>
             <Text style={styles.sectionTitle}>{labels.sections.setup}</Text>
@@ -214,9 +444,10 @@ export function SessionPDF({ project, session, messages, setupContext, labels })
           </View>
         ) : null}
 
-        {rounds.map(({ r, msgs }) => (
-          <View key={r} style={styles.roundBlock} minPresenceAhead={40}>
-            <Text style={styles.roundHeading}>Round {r}</Text>
+        <Text style={styles.sectionTitle}>{sectionLabels.transcript}</Text>
+        {rounds.map(({ r: rn, msgs }) => (
+          <View key={rn} style={styles.roundBlock} minPresenceAhead={40}>
+            <Text style={styles.roundHeading}>{labels.round_prefix} {rn}</Text>
             {msgs.map((m, i) => (
               <View key={i} style={styles.messageBlock} minPresenceAhead={30}>
                 <Text style={styles.agentLabel}>{m.agent_role}</Text>

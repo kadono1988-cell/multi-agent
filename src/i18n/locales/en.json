@@ -129,6 +129,7 @@
     "next_round": "Round {{n}} →",
     "generating": "⏳ Generating...",
     "download_memo": "Download memo",
+    "generating_memo": "⏳ Drafting report...",
     "thinking_suffix": " is thinking",
     "history_heading": "Past discussions",
     "view_history": "View →"
@@ -177,15 +178,35 @@
     "delete_case_confirm": "Delete this case?"
   },
   "summary_export": {
-    "title": "Construction Decision Support Platform — Discussion Summary",
-    "subtitle": "Decision discussion by 4 agents: PM / CFO / COO / CEO",
+    "title": "Construction Decision Support Platform — Decision Memo",
+    "subtitle": "Structured record of a decision discussion by 4 agents (PM / CFO / COO / CEO)",
     "section_setup": "▌ Setup context",
+    "section_cover_summary": "▌ Executive Summary",
+    "section_structured_body": "▌ Structured Body",
+    "section_appendix": "—  APPENDIX  —",
+    "section_transcript": "▌ Round-by-round transcript",
     "footer": "Generated: {{date}}  —  Construction Multi-Agent Decision System",
     "label_project": "Project",
     "label_client": "Client",
     "label_budget": "Budget",
     "label_theme": "Theme",
     "label_date": "Date",
-    "unset": "Not set"
+    "unset": "Not set",
+    "report_executive_summary": "Overview",
+    "report_conclusion": "Bottom line",
+    "report_discussion_points": "Key discussion points",
+    "report_agreements": "Agreements reached",
+    "report_disagreements": "Open disagreements",
+    "report_final_decision": "Final decision & rationale",
+    "report_action_items": "Action items",
+    "report_col_owner": "Owner",
+    "report_col_task": "Task",
+    "report_col_due": "Due",
+    "report_empty_points": "No clear discussion points were extracted.",
+    "report_empty_agreements": "No agreements were reached.",
+    "report_empty_disagreements": "No unresolved disagreements remain.",
+    "report_empty_rationale": "No rationale was recorded.",
+    "report_empty_actions": "No action items were recorded.",
+    "report_unavailable": "AI-structured report could not be generated. Please refer to the verbatim transcript in the Appendix."
   }
 }

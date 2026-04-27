@@ -197,6 +197,115 @@ export const generateAgentResponse = async (
   return { role: agentKey, content };
 };
 
+// ── Decision-memo synthesizer ────────────────────────────────────────────────
+// Reads the entire transcript and returns a structured report for the PDF.
+// Returns null on failure so the caller can fall back to a transcript-only PDF.
+
+function extractJsonObject(text) {
+  if (!text) return null;
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1] : text;
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+  if (start === -1 || end === -1 || end < start) return null;
+  try {
+    return JSON.parse(candidate.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+export const synthesizeDecisionMemo = async ({
+  project, session, messages, setupContext, locale = 'ja'
+}) => {
+  if (!messages || messages.length === 0) return null;
+
+  const transcript = messages
+    .map(m => `[Round ${m.round_number}] ${m.agent_role}:\n${m.content}`)
+    .join('\n\n');
+
+  const projectBlock = `プロジェクト名: ${project?.name || '未設定'}
+施主: ${project?.client || '未設定'}
+予算: ${project?.budget || '未設定'}
+テーマ: ${session?.theme_type || '未設定'}
+概要: ${project?.summary || '未設定'}`;
+
+  const setupBlock = setupContext ? [
+    setupContext.user_context && `相談内容: ${setupContext.user_context}`,
+    setupContext.constraints && `制約条件: ${setupContext.constraints}`,
+    setupContext.goal && `目標ゴール: ${setupContext.goal}`,
+    setupContext.focus_points && `論点設定: ${setupContext.focus_points}`,
+    setupContext.prfaq && `PRFAQ: ${setupContext.prfaq}`,
+  ].filter(Boolean).join('\n') : '';
+
+  const langInstruction = locale === 'en'
+    ? 'Write all values in English.'
+    : 'すべての値を日本語で記述してください。';
+
+  const systemInstruction = `あなたは建設プロジェクトの意思決定議事録を構造化するアナリストです。
+複数の専門家エージェント (PM/CFO/COO/CEO 等) と、必要に応じてユーザー (USER) の発言を読み解き、
+意思決定のためのレポートに再構成してください。事実関係を捏造せず、議論で実際に出た内容のみを抽出します。
+${langInstruction}`;
+
+  const prompt = `以下は建設プロジェクトに関する複数エージェントの議論ログです。これを「エグゼクティブ向け意思決定メモ」に再構成し、JSONのみを出力してください。
+
+【プロジェクト情報】
+${projectBlock}
+
+${setupBlock ? `【セットアップコンテキスト】\n${setupBlock}\n` : ''}
+【議論ログ (全Round)】
+${transcript}
+
+【出力フォーマット (このJSONスキーマ厳守・他の文字列を一切出力しない)】
+{
+  "executive_summary": "意思決定の概要を3-5文で。背景・主要論点・到達結論を含める。",
+  "conclusion": "最終的にどう決まったかを1-2文で簡潔に。未確定なら『未確定: 理由』形式。",
+  "discussion_points": ["議論された主要論点を箇条書き(最大6件)。各40字以内。"],
+  "agreements": ["エージェント間で合意に至った事項(最大5件)。なければ空配列。"],
+  "disagreements": ["対立・未解決として残った論点(最大5件)。各論点に立場の違いも含める。なければ空配列。"],
+  "final_decision": {
+    "headline": "最終決定の一言要約。未確定なら『判断保留』。",
+    "rationale": ["判断根拠を箇条書き(最大4件)。"]
+  },
+  "action_items": [
+    { "owner": "PM", "task": "具体的な実行タスク", "due": "期限が明示されていれば記入、なければ空文字" }
+  ]
+}
+
+注意:
+- "owner" は議論に登場した役職名 (PM / CFO / COO / CEO / USER 等) かフリーテキスト
+- action_items は最大8件、議論で実際に指示された内容のみ
+- 議論が短い/未完結の場合でも、空配列や『未確定』表現で必ずこのスキーマを満たす
+- JSON以外の前置きや解説を絶対に書かない`;
+
+  try {
+    const raw = await callGemini(prompt, systemInstruction);
+    const parsed = extractJsonObject(raw);
+    if (!parsed) return null;
+    return {
+      executive_summary: parsed.executive_summary || '',
+      conclusion: parsed.conclusion || '',
+      discussion_points: Array.isArray(parsed.discussion_points) ? parsed.discussion_points : [],
+      agreements: Array.isArray(parsed.agreements) ? parsed.agreements : [],
+      disagreements: Array.isArray(parsed.disagreements) ? parsed.disagreements : [],
+      final_decision: {
+        headline: parsed.final_decision?.headline || '',
+        rationale: Array.isArray(parsed.final_decision?.rationale) ? parsed.final_decision.rationale : [],
+      },
+      action_items: Array.isArray(parsed.action_items)
+        ? parsed.action_items.map(a => ({
+            owner: a.owner || '',
+            task: a.task || '',
+            due: a.due || '',
+          }))
+        : [],
+    };
+  } catch (err) {
+    console.warn('[Gemini] synthesizeDecisionMemo failed:', err?.message || err);
+    return null;
+  }
+};
+
 /**
  * Streaming version using the Gemini SDK.
  * `onChunk(partialText)` is called incrementally as text arrives.
