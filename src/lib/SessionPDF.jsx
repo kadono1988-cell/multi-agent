@@ -182,14 +182,15 @@ const styles = StyleSheet.create({
   cellDue: { width: 70, fontSize: 9, color: COLORS.muted },
 
   appendixBanner: {
-    marginTop: 16,
-    marginBottom: 8,
-    padding: 6,
-    backgroundColor: COLORS.bgSoft,
-    fontSize: 11,
-    color: COLORS.muted,
+    marginTop: 28,
+    marginBottom: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
+    backgroundColor: COLORS.text,
+    color: "#ffffff",
+    fontSize: 12,
     textAlign: "center",
-    letterSpacing: 1,
+    letterSpacing: 2,
   },
 
   setupField: {
@@ -296,7 +297,7 @@ function BulletList({ items, emptyHint }) {
   return (
     <View>
       {valid.map((item, i) => (
-        <View key={i} style={styles.bulletRow} wrap={false}>
+        <View key={i} style={styles.bulletRow}>
           <Text style={styles.bulletDot}>•</Text>
           <Text style={styles.bulletText}>{item}</Text>
         </View>
@@ -413,7 +414,6 @@ export function SessionPDF({ project, session, messages, setupContext, labels, r
                   <View
                     key={i}
                     style={[styles.actionRow, i % 2 === 1 ? styles.actionRowAlt : null]}
-                    wrap={false}
                   >
                     <Text style={styles.cellOwner}>{a.owner || '—'}</Text>
                     <Text style={styles.cellTask}>{a.task || '—'}</Text>
@@ -428,7 +428,10 @@ export function SessionPDF({ project, session, messages, setupContext, labels, r
         ) : null}
 
         {/* ── Appendix ─────────────────────────────────────────── */}
-        <View break>
+        {/* Avoid `break` here: combined with the <View fixed> footer it triggers
+            a known react-pdf/PDFKit overflow ("unsupported number: -9.44e+21").
+            Use a strong visual banner with top spacing instead. */}
+        <View>
           <Text style={styles.appendixBanner}>{sectionLabels.appendix}</Text>
         </View>
 
