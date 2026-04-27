@@ -218,8 +218,33 @@ function App() {
       setSession({ ...histSession, readonly: true });
       setMessages(msgs);
       setCurrentRound(maxRound || 5);
+      restoreSetupContext(histSession.setup_context);
     }
     setLoading(false);
+  };
+
+  const resumeSession = async (histSession) => {
+    setLoading(true);
+    const { data: msgs } = await supabase
+      .from('agent_messages')
+      .select('*')
+      .eq('session_id', histSession.id)
+      .order('created_at');
+
+    setSession({ ...histSession, readonly: false });
+    setMessages(msgs || []);
+    setCurrentRound(histSession.current_round || 1);
+    restoreSetupContext(histSession.setup_context);
+    setLoading(false);
+  };
+
+  const restoreSetupContext = (ctx) => {
+    if (!ctx) return;
+    setSetupContext(ctx.user_context || '');
+    setSetupConstraints(ctx.constraints || '');
+    setSetupGoal(ctx.goal || '');
+    setSetupFocusPoints(ctx.focus_points || '');
+    setSetupPrfaq(ctx.prfaq || '');
   };
 
   const exitHistoryView = () => {
@@ -253,7 +278,12 @@ function App() {
         const validThemeId = THEMES.find(th => th.id === setupTheme) ? setupTheme : 'custom';
         const { data, error } = await supabase
           .from('decision_sessions')
-          .insert({ project_id: activeProject.id, theme_type: validThemeId })
+          .insert({
+            project_id: activeProject.id,
+            theme_type: validThemeId,
+            setup_context: extendedContext,
+            current_round: 1,
+          })
           .select().single();
         if (error) throw new Error(error.message);
         sessionData = data;
@@ -326,6 +356,12 @@ function App() {
     setIsThinking(true);
     const nextR = currentRound + 1;
     setCurrentRound(nextR);
+
+    if (!isDemo && session.id) {
+      const sessionPatch = { current_round: nextR };
+      if (nextR >= 5) sessionPatch.status = 'completed';
+      await supabase.from('decision_sessions').update(sessionPatch).eq('id', session.id);
+    }
 
     try {
       if (isDemo) {
@@ -972,17 +1008,29 @@ function App() {
                       <History size={16} /> {t('session.history_heading')}
                     </h3>
                     <div className="history-list">
-                      {sessionHistory.map(s => (
-                        <div key={s.id} className="history-item" onClick={() => viewHistorySession(s)}>
-                          <div>
-                            <span className="history-theme">{getThemeLabel(s.theme_type)}</span>
-                            <span className="history-date">
-                              {new Date(s.created_at).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {sessionHistory.map(s => {
+                        const maxR = s.max_rounds || 5;
+                        const curR = s.current_round || 0;
+                        const incomplete = s.status !== 'completed' && curR > 0 && curR < maxR;
+                        return (
+                          <div
+                            key={s.id}
+                            className="history-item"
+                            onClick={() => incomplete ? resumeSession(s) : viewHistorySession(s)}
+                          >
+                            <div>
+                              <span className="history-theme">{getThemeLabel(s.theme_type)}</span>
+                              <span className="history-date">
+                                {new Date(s.created_at).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                {incomplete ? ` · R${curR}/${maxR}` : ''}
+                              </span>
+                            </div>
+                            <span style={{ color: incomplete ? 'var(--accent)' : 'var(--secondary)', fontSize: '0.8rem' }}>
+                              {incomplete ? t('session.resume_session') : t('session.view_history')}
                             </span>
                           </div>
-                          <span style={{ color: 'var(--secondary)', fontSize: '0.8rem' }}>{t('session.view_history')}</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}

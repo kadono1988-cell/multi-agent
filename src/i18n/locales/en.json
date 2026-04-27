@@ -132,7 +132,8 @@
     "generating_memo": "⏳ Drafting report...",
     "thinking_suffix": " is thinking",
     "history_heading": "Past discussions",
-    "view_history": "View →"
+    "view_history": "View →",
+    "resume_session": "▶ Resume"
   },
   "welcome": {
     "title": "Start a decision discussion",

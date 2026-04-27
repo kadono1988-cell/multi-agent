@@ -132,7 +132,8 @@
     "generating_memo": "⏳ レポート生成中…",
     "thinking_suffix": "が思考中",
     "history_heading": "過去の議論履歴",
-    "view_history": "閲覧 →"
+    "view_history": "閲覧 →",
+    "resume_session": "▶ 続きから"
   },
   "welcome": {
     "title": "意思決定議論を開始",
