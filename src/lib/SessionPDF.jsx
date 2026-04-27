@@ -274,7 +274,6 @@ const styles = StyleSheet.create({
   emptyHint: {
     fontSize: 9,
     color: COLORS.muted,
-    fontStyle: "italic",
     marginBottom: 6,
   },
 });
