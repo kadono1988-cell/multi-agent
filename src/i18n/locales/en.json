@@ -17,7 +17,8 @@
   },
   "header": {
     "title": "👷 Construction Decision Support Platform",
-    "demo_badge": "Demo Mode"
+    "demo_badge": "Demo Mode",
+    "toggle_theme": "Toggle light/dark"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -35,6 +36,9 @@
     "no_results": "No results",
     "empty": "No projects",
     "client_default": "Client",
+    "status_completed": "✅ Done",
+    "status_active": "🔵 R{{n}}/{{max}}",
+    "status_none": "Not started",
     "delete_confirm": "Delete \"{{name}}\"? This cannot be undone.",
     "name_required": "Please enter a project name",
     "edit_title": "Edit project",
@@ -70,6 +74,13 @@
     "budget_label": "Budget:",
     "duration_label": "Schedule:",
     "progress_heading": "Progress",
+    "live_summary_heading": "🧭 Where the discussion stands",
+    "live_summary_refresh": "🔄 Refresh",
+    "live_summary_refreshing": "Refreshing...",
+    "live_summary_focus": "Focus:",
+    "live_summary_agreements": "Tentative agreements:",
+    "live_summary_tensions": "Open tensions:",
+    "live_summary_empty": "Auto-refreshes when a round completes. Click to refresh manually.",
     "round_n_of_5": "Round {{n}} / 5",
     "round_n_of_max": "Round {{n}} / {{max}}",
     "completed_mark": " ✅ Done",

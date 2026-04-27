@@ -11,13 +11,41 @@
   --input: #e2e8f0;
   --ring: #3b82f6;
   --radius: 0.75rem;
-  
+  --soft-bg: #f8fafc;
+
   /* Role Colors */
   --color-pm: #0ea5e9;
   --color-cfo: #10b981;
   --color-coo: #f59e0b;
   --color-ceo: #8b5cf6;
 }
+
+[data-theme="dark"] {
+  --primary: #e2e8f0;
+  --primary-foreground: #0f172a;
+  --secondary: #94a3b8;
+  --accent: #60a5fa;
+  --accent-foreground: #0f172a;
+  --background: #0f172a;
+  --card: #1e293b;
+  --card-foreground: #f1f5f9;
+  --border: #334155;
+  --input: #334155;
+  --ring: #60a5fa;
+  --soft-bg: #0b1220;
+}
+
+[data-theme="dark"] body { color: var(--card-foreground); }
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+  background-color: var(--soft-bg);
+  color: var(--card-foreground);
+  border-color: var(--border);
+}
+[data-theme="dark"] .btn,
+[data-theme="dark"] .btn-icon { color: var(--card-foreground); }
+[data-theme="dark"] .btn-primary { color: var(--primary-foreground); }
 
 * {
   box-sizing: border-box;

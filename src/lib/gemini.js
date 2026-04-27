@@ -279,6 +279,46 @@ export const generateAgentResponse = async (
   return { role: agentKey, content };
 };
 
+// ── Live discussion summary ──────────────────────────────────────────────────
+// Quick TLDR of the discussion so far. Used by the right-side panel during
+// an active session. Cheap prompt — can be called after each round.
+
+export const summarizeProgress = async ({ messages, locale = 'ja' }) => {
+  if (!messages || messages.length === 0) return null;
+  const transcript = messages
+    .map(m => `[R${m.round_number}] ${m.agent_role}: ${(m.content || '').slice(0, 600)}`)
+    .join('\n\n');
+  const langInstruction = locale === 'en' ? 'Reply in English.' : 'すべて日本語で。';
+
+  const prompt = `次のマルチエージェント議論ログを読み、現在の状態を3つのトピックで簡潔に要約してください。各トピックは2文以内・全体200字以内。
+
+【ログ】
+${transcript}
+
+【出力 (このスキーマ厳守・JSONのみ)】
+{
+  "current_focus": "今まさに焦点になっている論点",
+  "tentative_agreements": "暫定合意 (なければ『なし』)",
+  "open_tensions": "対立・未解決 (なければ『なし』)"
+}
+
+${langInstruction}`;
+
+  try {
+    const raw = await callGemini(prompt, 'あなたは建設会社の議事録要約担当です。');
+    const parsed = extractJsonObject(raw);
+    if (!parsed) return null;
+    return {
+      current_focus: parsed.current_focus || '',
+      tentative_agreements: parsed.tentative_agreements || '',
+      open_tensions: parsed.open_tensions || '',
+    };
+  } catch (err) {
+    console.warn('[Gemini] summarizeProgress failed:', err?.message || err);
+    return null;
+  }
+};
+
 // ── AI meeting designer ──────────────────────────────────────────────────────
 // Reads the project brief and returns a suggested meeting plan that the user
 // can edit before pressing "Start". Returns null on any failure so the UI can

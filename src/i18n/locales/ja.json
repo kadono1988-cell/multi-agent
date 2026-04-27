@@ -17,7 +17,8 @@
   },
   "header": {
     "title": "👷 建設意思決定支援プラットフォーム",
-    "demo_badge": "Demo Mode"
+    "demo_badge": "Demo Mode",
+    "toggle_theme": "ライト/ダーク切替"
   },
   "nav": {
     "dashboard": "ダッシュボード",
@@ -35,6 +36,9 @@
     "no_results": "該当なし",
     "empty": "プロジェクトがありません",
     "client_default": "Client",
+    "status_completed": "✅ 完了",
+    "status_active": "🔵 R{{n}}/{{max}}",
+    "status_none": "未開始",
     "delete_confirm": "「{{name}}」を削除しますか？この操作は取り消せません。",
     "name_required": "プロジェクト名を入力してください",
     "edit_title": "プロジェクト編集",
@@ -70,6 +74,13 @@
     "budget_label": "予算:",
     "duration_label": "工期:",
     "progress_heading": "進行状況",
+    "live_summary_heading": "🧭 議論の現状",
+    "live_summary_refresh": "🔄 更新",
+    "live_summary_refreshing": "更新中…",
+    "live_summary_focus": "焦点:",
+    "live_summary_agreements": "暫定合意:",
+    "live_summary_tensions": "対立:",
+    "live_summary_empty": "ラウンド完了後に自動更新されます。手動更新も可。",
     "round_n_of_5": "Round {{n}} / 5",
     "round_n_of_max": "Round {{n}} / {{max}}",
     "completed_mark": " ✅ 完了",

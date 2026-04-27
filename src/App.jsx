@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import './index.css'
 import { supabase } from './lib/supabase'
-import { generateAgentResponseStream, generateAgentResponse, synthesizeDecisionMemo, suggestMeetingDesign, extractConfidence, AGENT_ROLES } from './lib/gemini'
+import { generateAgentResponseStream, generateAgentResponse, synthesizeDecisionMemo, suggestMeetingDesign, summarizeProgress, extractConfidence, AGENT_ROLES } from './lib/gemini'
 import { getRoundConfig } from './lib/roundConfig'
 import { loadAgents, saveAgentToStorage, deleteAgentFromStorage } from './lib/agents_manager'
 import { MOCK_PROJECTS, MOCK_MESSAGES } from './lib/mockData'
 import {
   Layout, MessageSquare, PlusCircle, BookOpen,
-  Users, Save, Trash2, Download, History
+  Users, Save, Trash2, Download, History, Sun, Moon, Upload, BarChart3
 } from 'lucide-react'
 import { LanguageToggle } from './components/LanguageToggle'
 
@@ -86,6 +86,13 @@ function App() {
   const [gateOpen, setGateOpen] = useState(null) // 'r1' | 'final' | null
   const [meetingDesign, setMeetingDesign] = useState(null)
   const [isDesigning, setIsDesigning] = useState(false)
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === 'undefined') return 'light';
+    return localStorage.getItem('mads_theme') || (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  })
+  const [liveSummary, setLiveSummary] = useState(null)
+  const [isSummarizing, setIsSummarizing] = useState(false)
+  const [projectStatusMap, setProjectStatusMap] = useState({})
   const timelineEndRef = useRef(null)
 
   // ── Agents & Knowledge ──────────────────────────────────────────────────────
@@ -136,6 +143,12 @@ function App() {
   });
 
   const isDemo = !import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_GEMINI_API_KEY;
+
+  // ── Theme ────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('mads_theme', theme);
+  }, [theme]);
 
   // ── Initialization ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -210,7 +223,27 @@ function App() {
 
   const fetchProjects = async () => {
     const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
-    if (data) setProjects(data);
+    if (data) {
+      setProjects(data);
+      // Fetch latest session status per project for the sidebar progress badge
+      const { data: sessions } = await supabase
+        .from('decision_sessions')
+        .select('project_id, status, current_round, max_rounds, created_at')
+        .order('created_at', { ascending: false });
+      if (sessions) {
+        const map = {};
+        for (const s of sessions) {
+          if (!map[s.project_id]) {
+            map[s.project_id] = {
+              status: s.status,
+              current_round: s.current_round || 0,
+              max_rounds: s.max_rounds || 5,
+            };
+          }
+        }
+        setProjectStatusMap(map);
+      }
+    }
   };
 
   const loadSessionHistory = async (projectId) => {
@@ -241,6 +274,7 @@ function App() {
     setFollowUpInput('');
     setGateOpen(null);
     setMeetingDesign(null);
+    setLiveSummary(null);
   };
 
   const requestMeetingDesign = async () => {
@@ -312,6 +346,20 @@ function App() {
     setGroundingEnabled(histSession.grounding_enabled || false);
     restoreSetupContext(histSession.setup_context);
     setLoading(false);
+  };
+
+  const refreshLiveSummary = async () => {
+    if (!session || messages.length === 0 || isSummarizing) return;
+    setIsSummarizing(true);
+    try {
+      const sum = await summarizeProgress({
+        messages,
+        locale: i18n.resolvedLanguage === 'en' ? 'en' : 'ja',
+      });
+      if (sum) setLiveSummary(sum);
+    } finally {
+      setIsSummarizing(false);
+    }
   };
 
   const restoreSetupContext = (ctx) => {
@@ -499,6 +547,8 @@ function App() {
       setIsThinking(false);
       setThinkingAgent(null);
       setStreamingContent(null);
+      // Refresh the right-panel live summary now that a round completed
+      if (!isDemo && session?.id) refreshLiveSummary();
     }
   };
 
@@ -698,8 +748,16 @@ function App() {
       <header>
         <div className="logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Layout /> {t('header.title')}
-          <span className="demo-badge">{isDemo ? t('header.demo_badge') : 'v0.6'}</span>
+          <span className="demo-badge">{isDemo ? t('header.demo_badge') : 'v0.7'}</span>
           <LanguageToggle />
+          <button
+            className="btn-icon"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            aria-label={t('header.toggle_theme')}
+            style={{ marginLeft: 4 }}
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
         </div>
       </header>
 
@@ -747,16 +805,36 @@ function App() {
             </div>
 
             <div className="project-list">
-              {filteredProjects.map(p => (
-                <div
-                  key={p.id}
-                  className={`project-item ${activeProject?.id === p.id ? 'active' : ''}`}
-                  onClick={() => { setActiveProject(p); resetSession(); setIsEditingProject(false); }}
-                >
-                  <div className="name">{p.name}</div>
-                  <div className="meta">{p.client || t('projects.client_default')} · {p.strategic_importance}</div>
-                </div>
-              ))}
+              {filteredProjects.map(p => {
+                const st = projectStatusMap[p.id];
+                let badge = null;
+                if (st) {
+                  if (st.status === 'completed') {
+                    badge = { label: t('projects.status_completed'), color: '#10b981' };
+                  } else if (st.current_round > 0 && st.current_round < st.max_rounds) {
+                    badge = { label: t('projects.status_active', { n: st.current_round, max: st.max_rounds }), color: '#3b82f6' };
+                  }
+                } else {
+                  badge = { label: t('projects.status_none'), color: '#94a3b8' };
+                }
+                return (
+                  <div
+                    key={p.id}
+                    className={`project-item ${activeProject?.id === p.id ? 'active' : ''}`}
+                    onClick={() => { setActiveProject(p); resetSession(); setIsEditingProject(false); }}
+                  >
+                    <div className="name">{p.name}</div>
+                    <div className="meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                      <span>{p.client || t('projects.client_default')} · {p.strategic_importance}</span>
+                      {badge ? (
+                        <span style={{ fontSize: '0.7rem', color: '#fff', background: badge.color, padding: '1px 6px', borderRadius: 3, whiteSpace: 'nowrap' }}>
+                          {badge.label}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
               {filteredProjects.length === 0 && (
                 <p style={{ fontSize: '0.8rem', color: 'var(--secondary)', textAlign: 'center', padding: '1rem 0' }}>
                   {projectSearch || projectFilter !== 'all' ? t('projects.no_results') : t('projects.empty')}
@@ -1295,6 +1373,33 @@ function App() {
             <p style={{ fontSize: '0.83rem', color: 'var(--secondary)' }}>{t('right_panel.no_project')}</p>
           )}
         </div>
+
+        {session && messages.length > 0 && (
+          <div className="card" style={{ marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <h3 style={{ fontSize: '0.82rem', margin: 0 }}>{t('right_panel.live_summary_heading')}</h3>
+              <button className="btn-icon" style={{ fontSize: '0.78rem' }}
+                onClick={refreshLiveSummary} disabled={isSummarizing || isThinking}>
+                {isSummarizing ? t('right_panel.live_summary_refreshing') : t('right_panel.live_summary_refresh')}
+              </button>
+            </div>
+            {liveSummary ? (
+              <div style={{ fontSize: '0.78rem', lineHeight: 1.5 }}>
+                <p style={{ marginBottom: 6 }}>
+                  <strong style={{ color: 'var(--accent)' }}>{t('right_panel.live_summary_focus')}</strong> {liveSummary.current_focus}
+                </p>
+                <p style={{ marginBottom: 6 }}>
+                  <strong style={{ color: '#047857' }}>{t('right_panel.live_summary_agreements')}</strong> {liveSummary.tentative_agreements}
+                </p>
+                <p>
+                  <strong style={{ color: '#b45309' }}>{t('right_panel.live_summary_tensions')}</strong> {liveSummary.open_tensions}
+                </p>
+              </div>
+            ) : (
+              <p style={{ fontSize: '0.78rem', color: 'var(--secondary)' }}>{t('right_panel.live_summary_empty')}</p>
+            )}
+          </div>
+        )}
 
         {session && !session.readonly && (
           <div className="card" style={{ marginBottom: '1.5rem' }}>
