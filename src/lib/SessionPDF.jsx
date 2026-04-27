@@ -107,41 +107,22 @@ const styles = StyleSheet.create({
     lineHeight: 1.55,
   },
 
+  // Minimal textual variants — boxed/coloured callouts caused PDFKit
+  // overflow on real 5-round content. Restore decoration incrementally
+  // once we have a clean baseline.
   calloutBox: {
-    padding: 10,
-    marginTop: 4,
-    marginBottom: 6,
+    marginTop: 2,
+    marginBottom: 8,
+    paddingLeft: 6,
   },
-  calloutSummary: {
-    backgroundColor: COLORS.accentSoft,
-    borderLeftWidth: 3,
-    borderLeftStyle: "solid",
-    borderLeftColor: COLORS.accent,
-  },
-  calloutDecision: {
-    backgroundColor: COLORS.decisionSoft,
-    borderLeftWidth: 3,
-    borderLeftStyle: "solid",
-    borderLeftColor: COLORS.decision,
-  },
-  calloutAgree: {
-    backgroundColor: COLORS.positiveSoft,
-    borderLeftWidth: 3,
-    borderLeftStyle: "solid",
-    borderLeftColor: COLORS.positive,
-  },
-  calloutWarn: {
-    backgroundColor: COLORS.warnSoft,
-    borderLeftWidth: 3,
-    borderLeftStyle: "solid",
-    borderLeftColor: COLORS.warn,
-  },
+  calloutSummary: { color: COLORS.accent },
+  calloutDecision: { color: COLORS.decision },
+  calloutAgree: { color: COLORS.positive },
+  calloutWarn: { color: COLORS.warn },
   calloutLabel: {
     fontSize: 9,
     color: COLORS.muted,
     marginBottom: 4,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
   },
   calloutHeadline: {
     fontSize: 11,
@@ -149,46 +130,27 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
 
-  actionTable: {
-    marginTop: 4,
-    borderTopWidth: 0.5,
-    borderTopStyle: "solid",
-    borderTopColor: COLORS.border,
-    borderBottomWidth: 0.5,
-    borderBottomStyle: "solid",
-    borderBottomColor: COLORS.border,
+  // Action item list — flex/bordered table caused layout overflow on
+  // real data, so render as plain bullets with role label inline.
+  actionItemRow: {
+    marginBottom: 4,
+    paddingLeft: 4,
+    fontSize: 10,
+    lineHeight: 1.55,
   },
-  actionHeader: {
-    flexDirection: "row",
-    backgroundColor: COLORS.accent,
-    color: "#ffffff",
-    paddingVertical: 4,
-    paddingHorizontal: 6,
+  actionOwner: {
+    color: COLORS.accent,
+  },
+  actionDue: {
+    color: COLORS.muted,
     fontSize: 9,
   },
-  actionRow: {
-    flexDirection: "row",
-    borderTopWidth: 0.5,
-    borderTopStyle: "solid",
-    borderTopColor: COLORS.border,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-  },
-  actionRowAlt: {
-    backgroundColor: COLORS.tableRowAlt,
-  },
-  cellOwner: { width: 70, fontSize: 9 },
-  cellTask: { flex: 1, fontSize: 9, paddingRight: 4 },
-  cellDue: { width: 70, fontSize: 9, color: COLORS.muted },
 
   appendixBanner: {
-    marginTop: 28,
-    marginBottom: 12,
-    paddingTop: 10,
-    paddingBottom: 10,
-    backgroundColor: COLORS.text,
-    color: "#ffffff",
-    fontSize: 12,
+    marginTop: 24,
+    marginBottom: 10,
+    fontSize: 13,
+    color: COLORS.muted,
     textAlign: "center",
   },
 
@@ -353,15 +315,15 @@ export function SessionPDF({ project, session, messages, setupContext, labels, r
             <Text style={styles.sectionTitle}>{sectionLabels.cover_summary}</Text>
 
             {r.executive_summary ? (
-              <View style={[styles.calloutBox, styles.calloutSummary]}>
-                <Text style={styles.calloutLabel}>{reportLabels.executive_summary}</Text>
+              <View style={styles.calloutBox}>
+                <Text style={[styles.calloutLabel, styles.calloutSummary]}>{reportLabels.executive_summary}</Text>
                 <Text style={styles.paragraph}>{r.executive_summary}</Text>
               </View>
             ) : null}
 
             {r.conclusion ? (
-              <View style={[styles.calloutBox, styles.calloutDecision]}>
-                <Text style={styles.calloutLabel}>{reportLabels.conclusion}</Text>
+              <View style={styles.calloutBox}>
+                <Text style={[styles.calloutLabel, styles.calloutDecision]}>{reportLabels.conclusion}</Text>
                 <Text style={styles.paragraph}>{r.conclusion}</Text>
               </View>
             ) : null}
@@ -381,41 +343,28 @@ export function SessionPDF({ project, session, messages, setupContext, labels, r
             <Text style={styles.subsectionTitle}>{reportLabels.discussion_points}</Text>
             <BulletList items={r.discussion_points} emptyHint={reportLabels.empty_points} />
 
-            <Text style={styles.subsectionTitle}>{reportLabels.agreements}</Text>
-            <View style={[styles.calloutBox, styles.calloutAgree]}>
-              <BulletList items={r.agreements} emptyHint={reportLabels.empty_agreements} />
-            </View>
+            <Text style={[styles.subsectionTitle, styles.calloutAgree]}>{reportLabels.agreements}</Text>
+            <BulletList items={r.agreements} emptyHint={reportLabels.empty_agreements} />
 
-            <Text style={styles.subsectionTitle}>{reportLabels.disagreements}</Text>
-            <View style={[styles.calloutBox, styles.calloutWarn]}>
-              <BulletList items={r.disagreements} emptyHint={reportLabels.empty_disagreements} />
-            </View>
+            <Text style={[styles.subsectionTitle, styles.calloutWarn]}>{reportLabels.disagreements}</Text>
+            <BulletList items={r.disagreements} emptyHint={reportLabels.empty_disagreements} />
 
-            <Text style={styles.subsectionTitle}>{reportLabels.final_decision}</Text>
-            <View style={[styles.calloutBox, styles.calloutDecision]}>
-              {r.final_decision?.headline ? (
-                <Text style={styles.calloutHeadline}>{r.final_decision.headline}</Text>
-              ) : null}
-              <BulletList items={r.final_decision?.rationale} emptyHint={reportLabels.empty_rationale} />
-            </View>
+            <Text style={[styles.subsectionTitle, styles.calloutDecision]}>{reportLabels.final_decision}</Text>
+            {r.final_decision?.headline ? (
+              <Text style={styles.calloutHeadline}>{r.final_decision.headline}</Text>
+            ) : null}
+            <BulletList items={r.final_decision?.rationale} emptyHint={reportLabels.empty_rationale} />
 
             <Text style={styles.subsectionTitle}>{reportLabels.action_items}</Text>
             {(r.action_items && r.action_items.length > 0) ? (
-              <View style={styles.actionTable}>
-                <View style={styles.actionHeader}>
-                  <Text style={styles.cellOwner}>{reportLabels.col_owner}</Text>
-                  <Text style={styles.cellTask}>{reportLabels.col_task}</Text>
-                  <Text style={styles.cellDue}>{reportLabels.col_due}</Text>
-                </View>
+              <View>
                 {r.action_items.map((a, i) => (
-                  <View
-                    key={i}
-                    style={[styles.actionRow, i % 2 === 1 ? styles.actionRowAlt : null]}
-                  >
-                    <Text style={styles.cellOwner}>{a.owner || '—'}</Text>
-                    <Text style={styles.cellTask}>{a.task || '—'}</Text>
-                    <Text style={styles.cellDue}>{a.due || '—'}</Text>
-                  </View>
+                  <Text key={i} style={styles.actionItemRow}>
+                    <Text style={styles.actionOwner}>[{a.owner || '—'}] </Text>
+                    {a.task || '—'}
+                    {a.due ? ` ` : ''}
+                    {a.due ? <Text style={styles.actionDue}>({a.due})</Text> : null}
+                  </Text>
                 ))}
               </View>
             ) : (
