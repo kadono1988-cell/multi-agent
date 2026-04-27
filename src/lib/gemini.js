@@ -106,8 +106,16 @@ function buildAgentPrompt(agentKey, session, project, roundNumber, previousMessa
     ? `\n【重視すべき視点】今回の議論では特に「${setupContext.focus_points}」の観点を織り込んで発言してください。`
     : '';
 
+  // Per-agent supplemental persona document (uploaded by user) — appended to
+  // systemInstruction so the agent absorbs domain context (e.g. a real
+  // executive's writing samples) without polluting the main message body.
+  const personaDoc = setupContext?.persona_files?.[agentKey];
+  const personaInjection = personaDoc
+    ? `\n【追加ペルソナ資料】以下の資料の文体・視点・専門知識を吸収して発言に反映してください。\n${personaDoc.slice(0, 4000)}`
+    : '';
+
   let prompt = '';
-  let systemInstruction = `あなたは建設会社の${role.name}です。${role.description} スタイル：${role.style}${focusInjection}`;
+  let systemInstruction = `あなたは建設会社の${role.name}です。${role.description} スタイル：${role.style}${focusInjection}${personaInjection}`;
 
   // Map round → prompt template. Prefer explicit roundType (Bundle 2);
   // fall back to legacy round-number mapping for older callers.
@@ -132,15 +140,16 @@ ${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
 
   } else if (type === 'feedback') {
     const prevRoundMessages = previousMessages.map(m => `${m.agent_role}: ${m.content}`).join('\n\n');
-    systemInstruction += `。他のメンバーと矛盾点や甘い見積もりを指摘してください。`;
+    systemInstruction += `。他のメンバーと矛盾点や甘い見積もりを指摘してください。会議では発言の最後に必ず他の専門家1名を名指しで質問を投げ、議論をパスしてください。`;
     prompt = `他のメンバーの意見を聞いて、以下の議論を深めてください。
 これまでの議論：
 ${prevRoundMessages}
 
 出力内容：
-1. 他のメンバーへのフィードバック
+1. 他のメンバーへのフィードバック (相手のロール名を明記して引用)
 2. 自身の提案の修正・強化
 3. 反論に対する再反論
+4. 【他専門家への直接質問】 他のメンバー1名を「@PM」「@CFO」など @役職 で名指しし、具体的な質問を1つだけ投げてください。例: 「@CFO ワーストケース試算で WACC を超えるのはどの工程か？」
 ※「PMさんの懸念については…」のように他メンバーの意見を直接引用してください。
 ${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
 

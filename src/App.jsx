@@ -90,6 +90,8 @@ function App() {
     if (typeof window === 'undefined') return 'light';
     return localStorage.getItem('mads_theme') || (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   })
+  const [participants, setParticipants] = useState([]) // agent_ids for this session
+  const [personaFiles, setPersonaFiles] = useState({}) // { [agentId]: extractedText }
   const [liveSummary, setLiveSummary] = useState(null)
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [projectStatusMap, setProjectStatusMap] = useState({})
@@ -214,6 +216,10 @@ function App() {
   const loadExpertAgents = async () => {
     const agents = await loadAgents();
     setCustomAgents(agents);
+    // Default participants: every agent flagged is_active and not external
+    setParticipants(prev => prev.length > 0 ? prev :
+      Object.keys(agents).filter(k => agents[k]?.is_active && agents[k]?.agent_type !== 'external')
+    );
   };
 
   const fetchReferenceCases = async () => {
@@ -344,8 +350,21 @@ function App() {
     setCurrentRound(histSession.current_round || 1);
     setMaxRounds(histSession.max_rounds || 5);
     setGroundingEnabled(histSession.grounding_enabled || false);
+    if (Array.isArray(histSession.participants)) setParticipants(histSession.participants);
     restoreSetupContext(histSession.setup_context);
     setLoading(false);
+  };
+
+  // Build the agents map filtered to the current session's participants.
+  const effectiveAgents = () => {
+    const out = {};
+    for (const id of participants) {
+      if (customAgents[id]) out[id] = { ...customAgents[id], is_active: true };
+    }
+    // Always keep CEO if it exists, even if not explicitly selected, since the
+    // round flow needs at least one CEO for ceo_check / ceo_final.
+    if (customAgents.CEO && !out.CEO) out.CEO = { ...customAgents.CEO, is_active: true };
+    return out;
   };
 
   const refreshLiveSummary = async () => {
@@ -390,6 +409,7 @@ function App() {
       goal: setupGoal,
       focus_points: setupFocusPoints,
       prfaq: setupPrfaq,
+      persona_files: personaFiles,
     };
     setLoading(true);
 
@@ -409,6 +429,7 @@ function App() {
             current_round: 1,
             max_rounds: maxRounds,
             grounding_enabled: groundingEnabled,
+            participants: participants,
           })
           .select().single();
         if (error) throw new Error(error.message);
@@ -430,7 +451,8 @@ function App() {
           setMessages(prev => [...prev, { agent_role: msg.role, content: msg.content, round_number: 1 }]);
         }
       } else {
-        const cfg = getRoundConfig(1, maxRounds, customAgents);
+        const sessionAgents = effectiveAgents();
+        const cfg = getRoundConfig(1, maxRounds, sessionAgents);
         let currentMessages = [];
 
         for (const agentKey of cfg.agents) {
@@ -438,7 +460,7 @@ function App() {
           setStreamingContent({ agent_role: agentKey, content: '', round_number: 1 });
 
           const response = await generateAgentResponseStream(
-            agentKey, sessionObj, activeProject, 1, currentMessages, extendedContext, customAgents,
+            agentKey, sessionObj, activeProject, 1, currentMessages, extendedContext, sessionAgents,
             (partial) => setStreamingContent({ agent_role: agentKey, content: partial, round_number: 1 }),
             cfg.type,
             groundingEnabled
@@ -503,7 +525,8 @@ function App() {
           setMessages(prev => [...prev, { agent_role: msg.role, content: msg.content, round_number: nextR }]);
         }
       } else {
-        const cfg = getRoundConfig(nextR, maxRounds, customAgents);
+        const sessionAgents = effectiveAgents();
+        const cfg = getRoundConfig(nextR, maxRounds, sessionAgents);
         let currentMessages = [...messages];
 
         for (const agentKey of cfg.agents) {
@@ -516,9 +539,10 @@ function App() {
             goal: setupGoal,
             focus_points: setupFocusPoints,
             prfaq: setupPrfaq,
+            persona_files: personaFiles,
           };
           const response = await generateAgentResponseStream(
-            agentKey, session, activeProject, nextR, currentMessages, roundContext, customAgents,
+            agentKey, session, activeProject, nextR, currentMessages, roundContext, sessionAgents,
             (partial) => setStreamingContent({ agent_role: agentKey, content: partial, round_number: nextR }),
             cfg.type,
             groundingEnabled
@@ -1102,6 +1126,38 @@ function App() {
                   </div>
                 </div>
                 <div className="form-grid" style={{ marginTop: '1rem' }}>
+                  <div className="form-group full">
+                    <label>{t('setup.participants_label')}</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginTop: 4 }}>
+                      {Object.values(customAgents)
+                        .filter(a => a?.agent_type !== 'external')
+                        .map(a => (
+                          <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', fontWeight: 400 }}>
+                            <input type="checkbox" checked={participants.includes(a.id)}
+                              onChange={e => setParticipants(prev =>
+                                e.target.checked ? [...prev, a.id] : prev.filter(x => x !== a.id)
+                              )} />
+                            <span>{a.name}</span>
+                          </label>
+                        ))}
+                    </div>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--secondary)', marginTop: '0.6rem', marginBottom: '0.3rem' }}>
+                      {t('setup.external_hint')}
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
+                      {Object.values(customAgents)
+                        .filter(a => a?.agent_type === 'external')
+                        .map(a => (
+                          <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', fontWeight: 400 }}>
+                            <input type="checkbox" checked={participants.includes(a.id)}
+                              onChange={e => setParticipants(prev =>
+                                e.target.checked ? [...prev, a.id] : prev.filter(x => x !== a.id)
+                              )} />
+                            <span style={{ color: 'var(--accent)' }}>+ {a.name}</span>
+                          </label>
+                        ))}
+                    </div>
+                  </div>
                   <div className="form-group">
                     <label>{t('setup.depth_label')}</label>
                     <input type="range" min={3} max={7} step={2} value={maxRounds}
@@ -1110,6 +1166,31 @@ function App() {
                     <p style={{ fontSize: '0.78rem', color: 'var(--secondary)', marginTop: '0.3rem' }}>
                       {t('setup.depth_value', { n: maxRounds })}
                     </p>
+                  </div>
+                  <div className="form-group full">
+                    <label>{t('setup.persona_files_label')}</label>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--secondary)', marginTop: '0.3rem', marginBottom: '0.5rem' }}>
+                      {t('setup.persona_files_hint')}
+                    </p>
+                    {participants.map(id => (
+                      <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: '0.83rem' }}>
+                        <span style={{ minWidth: 80, color: 'var(--secondary)' }}>{customAgents[id]?.name || id}</span>
+                        <input type="file" accept=".txt,.md,.csv"
+                          onChange={async e => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            const text = await f.text();
+                            setPersonaFiles(prev => ({ ...prev, [id]: text }));
+                          }}
+                          style={{ flex: 1, fontSize: '0.78rem' }} />
+                        {personaFiles[id] ? (
+                          <button type="button" className="btn-icon" style={{ fontSize: '0.75rem' }}
+                            onClick={() => setPersonaFiles(prev => { const n = { ...prev }; delete n[id]; return n; })}>
+                            ✕
+                          </button>
+                        ) : null}
+                      </div>
+                    ))}
                   </div>
                   <div className="form-group">
                     <label>{t('setup.grounding_label')}</label>
