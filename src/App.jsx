@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import './index.css'
 import { supabase } from './lib/supabase'
-import { generateAgentResponseStream, generateAgentResponse, synthesizeDecisionMemo, suggestMeetingDesign, summarizeProgress, embedText, fetchSimilarDecisions, suggestTopicFromNews, extractConfidence, AGENT_ROLES } from './lib/gemini'
+import { generateAgentResponseStream, generateAgentResponse, synthesizeDecisionMemo, suggestMeetingDesign, summarizeProgress, embedText, fetchSimilarDecisions, suggestTopicFromNews, generateBriefing, extractConfidence, AGENT_ROLES } from './lib/gemini'
 import { getRoundConfig } from './lib/roundConfig'
 import { loadAgents, saveAgentToStorage, deleteAgentFromStorage } from './lib/agents_manager'
 import { MOCK_PROJECTS, MOCK_MESSAGES } from './lib/mockData'
@@ -11,6 +11,7 @@ import {
   Users, Save, Trash2, Download, History, Sun, Moon, Upload, BarChart3
 } from 'lucide-react'
 import { LanguageToggle } from './components/LanguageToggle'
+import { AuthBar } from './components/AuthBar'
 
 const CUSTOM_THEMES_KEY = 'mads_custom_themes';
 
@@ -98,6 +99,10 @@ function App() {
   const [newsSuggestion, setNewsSuggestion] = useState(null)
   const [isAnalyzingNews, setIsAnalyzingNews] = useState(false)
   const [analyticsData, setAnalyticsData] = useState(null)
+  const [currentUser, setCurrentUser] = useState(null)
+  const [briefingMode, setBriefingMode] = useState(false)
+  const [briefingDoc, setBriefingDoc] = useState(null)
+  const [isBriefingLoading, setIsBriefingLoading] = useState(false)
   const [liveSummary, setLiveSummary] = useState(null)
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [projectStatusMap, setProjectStatusMap] = useState({})
@@ -157,6 +162,15 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('mads_theme', theme);
   }, [theme]);
+
+  // ── Auth: track current user so writes can stamp owner_id ────────────────────
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUser(data?.user || null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      setCurrentUser(session?.user || null);
+    });
+    return () => sub?.subscription?.unsubscribe?.();
+  }, []);
 
   // ── Initialization ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -289,6 +303,7 @@ function App() {
     setGateOpen(null);
     setMeetingDesign(null);
     setLiveSummary(null);
+    setBriefingDoc(null);
   };
 
   const requestMeetingDesign = async () => {
@@ -399,7 +414,9 @@ function App() {
       type: newsSuggestion.project_type,
       strategic_importance: newsSuggestion.strategic_importance,
     };
-    const { data, error } = await supabase.from('projects').insert(newProject).select().single();
+    const { data, error } = await supabase.from('projects')
+      .insert({ ...newProject, owner_id: currentUser?.id || null })
+      .select().single();
     if (error) {
       alert(`Failed: ${error.message}`);
       return;
@@ -447,6 +464,76 @@ function App() {
     setAnalyticsData({ totalSessions, completed, byTheme, confidenceMix, confidenceByAgent, gateAdoption });
   };
 
+  // Minimal CSV parser: handles double-quoted fields with commas inside.
+  // First row is the header. Recognised columns map to projects schema.
+  const parseCsv = (text) => {
+    const rows = [];
+    let cur = [];
+    let cell = '';
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (inQuotes) {
+        if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+        else if (ch === '"') inQuotes = false;
+        else cell += ch;
+      } else {
+        if (ch === '"') inQuotes = true;
+        else if (ch === ',') { cur.push(cell); cell = ''; }
+        else if (ch === '\n') { cur.push(cell); rows.push(cur); cur = []; cell = ''; }
+        else if (ch === '\r') { /* skip */ }
+        else cell += ch;
+      }
+    }
+    if (cell.length > 0 || cur.length > 0) { cur.push(cell); rows.push(cur); }
+    return rows.filter(r => r.some(c => c.trim().length > 0));
+  };
+
+  const importProjectsCsv = async (text) => {
+    const rows = parseCsv(text);
+    if (rows.length < 2) { alert(t('projects.csv_empty')); return; }
+    const header = rows[0].map(c => c.trim().toLowerCase());
+    const allowed = ['name', 'summary', 'type', 'client_type', 'contract_type', 'strategic_importance',
+                     'client', 'duration', 'size', 'budget', 'building_usage', 'location', 'remarks'];
+    const records = rows.slice(1).map(r => {
+      const obj = { owner_id: currentUser?.id || null };
+      header.forEach((h, idx) => {
+        if (allowed.includes(h) && r[idx] !== undefined) obj[h] = r[idx].trim();
+      });
+      if (!obj.strategic_importance) obj.strategic_importance = 'medium';
+      return obj;
+    }).filter(r => r.name);
+
+    if (records.length === 0) { alert(t('projects.csv_no_name')); return; }
+    const { error } = await supabase.from('projects').insert(records);
+    if (error) {
+      alert(`Import failed: ${error.message}`);
+      return;
+    }
+    await fetchProjects();
+    alert(t('projects.csv_imported', { n: records.length }));
+  };
+
+  const requestBriefing = async () => {
+    if (!activeProject || isBriefingLoading) return;
+    setIsBriefingLoading(true);
+    try {
+      const brief = await generateBriefing({
+        project: activeProject,
+        setupContext: {
+          user_context: setupContext,
+          constraints: setupConstraints,
+          goal: setupGoal,
+        },
+        locale: i18n.resolvedLanguage === 'en' ? 'en' : 'ja',
+      });
+      if (brief) setBriefingDoc(brief);
+      else alert(t('briefing.failed'));
+    } finally {
+      setIsBriefingLoading(false);
+    }
+  };
+
   const refreshLiveSummary = async () => {
     if (!session || messages.length === 0 || isSummarizing) return;
     setIsSummarizing(true);
@@ -490,6 +577,7 @@ function App() {
       focus_points: setupFocusPoints,
       prfaq: setupPrfaq,
       persona_files: personaFiles,
+      briefing: briefingDoc?.approved ? briefingDoc : null,
     };
     setLoading(true);
 
@@ -510,6 +598,7 @@ function App() {
             max_rounds: maxRounds,
             grounding_enabled: groundingEnabled,
             participants: participants,
+            owner_id: currentUser?.id || null,
           })
           .select().single();
         if (error) throw new Error(error.message);
@@ -620,6 +709,7 @@ function App() {
             focus_points: setupFocusPoints,
             prfaq: setupPrfaq,
             persona_files: personaFiles,
+            briefing: briefingDoc?.approved ? briefingDoc : null,
           };
           const response = await generateAgentResponseStream(
             agentKey, session, activeProject, nextR, currentMessages, roundContext, sessionAgents,
@@ -812,7 +902,8 @@ function App() {
   const createOrUpdateProject = async () => {
     if (!projectForm.name) return alert(t('projects.name_required'));
     setLoading(true);
-    const { data } = await supabase.from('projects').upsert(projectForm).select().single();
+    const formWithOwner = projectForm.id ? projectForm : { ...projectForm, owner_id: currentUser?.id || null };
+    const { data } = await supabase.from('projects').upsert(formWithOwner).select().single();
     if (data) {
       await fetchProjects();
       setActiveProject(data);
@@ -880,6 +971,7 @@ function App() {
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
+          <AuthBar t={t} />
         </div>
       </header>
 
@@ -911,6 +1003,17 @@ function App() {
                 <button className="btn-icon" title={t('news.button')} onClick={() => setNewsModalOpen(true)}>
                   📰
                 </button>
+                <label className="btn-icon" title={t('projects.import_csv')} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
+                  <Upload size={15} />
+                  <input type="file" accept=".csv" style={{ display: 'none' }}
+                    onChange={async e => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      const text = await f.text();
+                      await importProjectsCsv(text);
+                      e.target.value = '';
+                    }} />
+                </label>
                 <button className="btn-icon" title={t('projects.new_title')} onClick={() => { setIsEditingProject(true); setProjectForm(EMPTY_PROJECT_FORM); }}>
                   <PlusCircle size={17} />
                 </button>
@@ -1419,6 +1522,22 @@ function App() {
                     </p>
                   </div>
                 </div>
+                <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'var(--soft-bg)', borderRadius: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong style={{ fontSize: '0.85rem' }}>📋 {t('briefing.section_title')}</strong>
+                    {briefingDoc?.approved ? (
+                      <span style={{ fontSize: '0.78rem', color: '#10b981' }}>✓ {t('briefing.approved')}</span>
+                    ) : (
+                      <button type="button" className="btn-icon" style={{ fontSize: '0.78rem' }}
+                        onClick={requestBriefing} disabled={isBriefingLoading}>
+                        {isBriefingLoading ? t('briefing.loading') : t('briefing.create')}
+                      </button>
+                    )}
+                  </div>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--secondary)', marginTop: '0.3rem' }}>
+                    {t('briefing.section_hint')}
+                  </p>
+                </div>
                 <button className="btn btn-primary" style={{ width:'100%', marginTop:'1.5rem', padding:'1rem' }}
                   onClick={startNewSession} disabled={loading}>
                   {loading ? t('common.preparing') : t('setup.start')}
@@ -1765,6 +1884,63 @@ function App() {
           </div>
         )}
       </div>
+
+      {briefingDoc && !briefingDoc.approved ? (
+        <div onClick={() => setBriefingDoc(null)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'var(--card)', color: 'var(--card-foreground)', borderRadius: 6,
+            padding: '1.5rem 1.75rem', maxWidth: 640, width: '94vw', maxHeight: '85vh',
+            overflowY: 'auto', boxShadow: '0 20px 50px rgba(0,0,0,0.18)',
+          }}>
+            <h3 style={{ marginTop: 0 }}>📋 {t('briefing.modal_title')}</h3>
+            <p style={{ color: 'var(--secondary)', fontSize: '0.85rem', lineHeight: 1.55, marginBottom: '0.75rem' }}>
+              {t('briefing.modal_intro')}
+            </p>
+            <div style={{ fontSize: '0.85rem', lineHeight: 1.55 }}>
+              <h4 style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>{t('briefing.field_summary')}</h4>
+              <p>{briefingDoc.executive_brief}</p>
+              {briefingDoc.factual_baseline?.length > 0 && (
+                <>
+                  <h4 style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>{t('briefing.field_facts')}</h4>
+                  <ul style={{ paddingLeft: '1.25rem' }}>{briefingDoc.factual_baseline.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                </>
+              )}
+              {briefingDoc.open_questions?.length > 0 && (
+                <>
+                  <h4 style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>{t('briefing.field_questions')}</h4>
+                  <ul style={{ paddingLeft: '1.25rem' }}>{briefingDoc.open_questions.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                </>
+              )}
+              {briefingDoc.evidence_from_cases?.length > 0 && (
+                <>
+                  <h4 style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>{t('briefing.field_evidence')}</h4>
+                  <ul style={{ paddingLeft: '1.25rem' }}>{briefingDoc.evidence_from_cases.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                </>
+              )}
+              {briefingDoc.decision_criteria?.length > 0 && (
+                <>
+                  <h4 style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>{t('briefing.field_criteria')}</h4>
+                  <ul style={{ paddingLeft: '1.25rem' }}>{briefingDoc.decision_criteria.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                </>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+              <button className="btn btn-primary" onClick={() => setBriefingDoc({ ...briefingDoc, approved: true })}>
+                ✓ {t('briefing.approve')}
+              </button>
+              <button className="btn" onClick={requestBriefing} disabled={isBriefingLoading}>
+                🔄 {t('briefing.regenerate')}
+              </button>
+              <button className="btn" onClick={() => setBriefingDoc(null)}>
+                {t('briefing.dismiss')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {newsModalOpen ? (
         <div onClick={() => setNewsModalOpen(false)} style={{

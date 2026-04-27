@@ -109,6 +109,15 @@ function buildAgentPrompt(agentKey, session, project, roundNumber, previousMessa
     - 備考: ${project.remarks || '特になし'}
   `;
 
+  const briefingBlock = setupContext?.briefing ? `
+    【事前ブリーフィング (リサーチャー作成・人間承認済み)】
+    要約: ${setupContext.briefing.executive_brief}
+    ${setupContext.briefing.factual_baseline?.length ? `事実関係:\n  - ${setupContext.briefing.factual_baseline.join('\n  - ')}` : ''}
+    ${setupContext.briefing.open_questions?.length ? `未解決の問い:\n  - ${setupContext.briefing.open_questions.join('\n  - ')}` : ''}
+    ${setupContext.briefing.evidence_from_cases?.length ? `事例からの示唆:\n  - ${setupContext.briefing.evidence_from_cases.join('\n  - ')}` : ''}
+    ${setupContext.briefing.decision_criteria?.length ? `判断基準:\n  - ${setupContext.briefing.decision_criteria.join('\n  - ')}` : ''}
+  ` : '';
+
   const sessionDetails = `
     【今回の相談コンテキスト】
     - 相談内容: ${setupContext?.user_context || '未設定'}
@@ -122,6 +131,7 @@ function buildAgentPrompt(agentKey, session, project, roundNumber, previousMessa
         ? `\n    【PRFAQ - プロジェクト完成時のニュース記事想定】\n${setupContext.prfaq}`
         : ''
     }
+${briefingBlock}
   `;
 
   // Focus points は全ラウンドで一貫した視点注入として systemInstruction にも注入する
@@ -309,6 +319,64 @@ export const generateAgentResponse = async (
 
   const content = await callGemini(prompt, systemInstruction);
   return { role: agentKey, content };
+};
+
+// ── Pre-meeting briefing ─────────────────────────────────────────────────────
+// "Phase 0" deep prep: pull RAG cases for the project, ask Gemini to weave
+// them into a structured briefing doc that the user can review/edit before
+// Round 1 starts. Mirrors the AWS AI-DLC "Researcher writes brief → Human
+// approves" cadence.
+
+export const generateBriefing = async ({ project, setupContext, locale = 'ja' }) => {
+  if (!project?.name) return null;
+  const { ragContext } = await fetchRAGContext(project);
+
+  const langInstruction = locale === 'en' ? 'Reply in English.' : 'すべて日本語で。';
+
+  const prompt = `次のプロジェクトと類似事例を踏まえ、議論を始める前のブリーフィング文書をJSONのみで出力してください。${langInstruction}
+
+【プロジェクト】
+名称: ${project.name}
+施主: ${project.client || '未設定'}
+予算: ${project.budget || '未設定'}
+工期: ${project.duration || '未設定'}
+規模: ${project.size || '未設定'}
+用途: ${project.building_usage || '未設定'}
+備考: ${project.remarks || '特になし'}
+概要: ${project.summary || '未設定'}
+
+【相談コンテキスト】
+${setupContext?.user_context || '未設定'}
+制約: ${setupContext?.constraints || '未設定'}
+ゴール: ${setupContext?.goal || '未設定'}
+
+【類似事例 (RAG)】
+${ragContext}
+
+【出力JSONスキーマ厳守】
+{
+  "executive_brief": "経営陣が3分で読める状況サマリ (200字)",
+  "factual_baseline": ["確定している事実を箇条書き、最大5件・各40字以内"],
+  "open_questions": ["議論で確かめるべき問いを箇条書き、最大5件"],
+  "evidence_from_cases": ["過去事例から学べるパターンや教訓を最大3件"],
+  "decision_criteria": ["判断基準として明示すべき項目を最大4件"]
+}`;
+
+  try {
+    const raw = await callGemini(prompt, 'あなたは建設プロジェクトのリサーチャーです。' + langInstruction);
+    const parsed = extractJsonObject(raw);
+    if (!parsed) return null;
+    return {
+      executive_brief: parsed.executive_brief || '',
+      factual_baseline: Array.isArray(parsed.factual_baseline) ? parsed.factual_baseline : [],
+      open_questions: Array.isArray(parsed.open_questions) ? parsed.open_questions : [],
+      evidence_from_cases: Array.isArray(parsed.evidence_from_cases) ? parsed.evidence_from_cases : [],
+      decision_criteria: Array.isArray(parsed.decision_criteria) ? parsed.decision_criteria : [],
+    };
+  } catch (err) {
+    console.warn('[Gemini] generateBriefing failed:', err?.message || err);
+    return null;
+  }
 };
 
 // ── News → discussion topic ──────────────────────────────────────────────────
