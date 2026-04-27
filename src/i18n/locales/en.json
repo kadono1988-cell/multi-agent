@@ -145,6 +145,21 @@
     "view_history": "View →",
     "resume_session": "▶ Resume"
   },
+  "design": {
+    "suggest_button": "Let AI design the meeting",
+    "designing": "Designing...",
+    "failed": "AI failed to draft a meeting design. Please configure manually.",
+    "modal_title": "AI-suggested meeting design",
+    "modal_intro": "AI analysed the project and proposed a discussion design. Apply to auto-fill theme, depth and focus points.",
+    "field_theme": "Theme",
+    "field_rounds": "Rounds",
+    "field_minutes": "Estimated duration",
+    "field_focus": "Focus points",
+    "field_risks": "Key risks",
+    "field_missing": "Missing information",
+    "apply_button": "✓ Apply design",
+    "dismiss_button": "Dismiss"
+  },
   "confidence": {
     "high": "Confidence: High",
     "medium": "Confidence: Medium",

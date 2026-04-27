@@ -56,25 +56,72 @@ export const DEFAULT_AGENTS = {
   }
 };
 
+// Phase 2 — load canonical persona definitions from public/agents/*.md so
+// they're editable without a code change. Hard-coded DEFAULT_AGENTS stays
+// as last-resort fallback only (e.g. Vercel preview where /agents/ might
+// not be accessible).
+async function loadAgentsFromMarkdown() {
+  try {
+    const idxRes = await fetch('/agents/index.json', { cache: 'no-cache' });
+    if (!idxRes.ok) return null;
+    const ids = await idxRes.json();
+    const out = {};
+    for (const id of ids) {
+      const r = await fetch(`/agents/${id}.md`, { cache: 'no-cache' });
+      if (!r.ok) continue;
+      const text = await r.text();
+      const parsed = parseMarkdownPersona(text);
+      if (parsed?.id) out[parsed.id] = parsed;
+    }
+    return Object.keys(out).length > 0 ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseMarkdownPersona(text) {
+  const m = text.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!m) return null;
+  const meta = {};
+  for (const line of m[1].split('\n')) {
+    const kv = line.match(/^([a-zA-Z_]+):\s*(.*)$/);
+    if (!kv) continue;
+    let v = kv[2].trim();
+    if (v === 'true') v = true;
+    else if (v === 'false') v = false;
+    meta[kv[1]] = v;
+  }
+  meta.description = m[2].trim();
+  return meta;
+}
+
 export const loadAgents = async () => {
+  // 1) Supabase customizations win if present (user edited via UI).
   try {
     const { data, error } = await supabase.from('expert_agents').select('*').order('created_at');
-    if (error || !data || data.length === 0) {
-      const local = localStorage.getItem('expert_agents');
-      return local ? JSON.parse(local) : DEFAULT_AGENTS;
+    if (!error && data && data.length > 0) {
+      return data.reduce((acc, curr) => {
+        acc[curr.agent_id] = { ...curr, id: curr.agent_id };
+        return acc;
+      }, {});
     }
-    // Convert array to object
-    return data.reduce((acc, curr) => {
-      acc[curr.agent_id] = {
-        ...curr,
-        id: curr.agent_id // for UI
-      };
-      return acc;
-    }, {});
-  } catch (e) {
+  } catch { /* fall through */ }
+
+  // 2) localStorage cache from older custom edits.
+  try {
     const local = localStorage.getItem('expert_agents');
-    return local ? JSON.parse(local) : DEFAULT_AGENTS;
-  }
+    if (local) {
+      const parsed = JSON.parse(local);
+      if (parsed && Object.keys(parsed).length > 0) return parsed;
+    }
+  } catch { /* fall through */ }
+
+  // 3) Canonical defaults from .md files (Phase 2 source of truth).
+  const fromMd = await loadAgentsFromMarkdown();
+  if (fromMd) return fromMd;
+
+  // 4) Bundled fallback for offline / preview environments.
+  return DEFAULT_AGENTS;
 };
 
 export const saveAgentToStorage = async (agent) => {

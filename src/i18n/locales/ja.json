@@ -145,6 +145,21 @@
     "view_history": "閲覧 →",
     "resume_session": "▶ 続きから"
   },
+  "design": {
+    "suggest_button": "AI に会議体設計を任せる",
+    "designing": "設計中…",
+    "failed": "AI による会議体設計の生成に失敗しました。手動で設定してください。",
+    "modal_title": "AI による会議体設計",
+    "modal_intro": "プロジェクト情報を AI が分析し、推奨する議論設計を提案しました。下の内容を採用すると、テーマ・ラウンド数・重視論点が自動でセットされます。",
+    "field_theme": "推奨テーマ",
+    "field_rounds": "推奨ラウンド数",
+    "field_minutes": "目安所要時間",
+    "field_focus": "重視論点",
+    "field_risks": "想定主要リスク",
+    "field_missing": "事前に揃えるべき情報",
+    "apply_button": "✓ この設計を採用",
+    "dismiss_button": "却下"
+  },
   "confidence": {
     "high": "確信度: 高",
     "medium": "確信度: 中",

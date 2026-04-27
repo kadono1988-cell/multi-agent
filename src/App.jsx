@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import './index.css'
 import { supabase } from './lib/supabase'
-import { generateAgentResponseStream, generateAgentResponse, synthesizeDecisionMemo, extractConfidence, AGENT_ROLES } from './lib/gemini'
+import { generateAgentResponseStream, generateAgentResponse, synthesizeDecisionMemo, suggestMeetingDesign, extractConfidence, AGENT_ROLES } from './lib/gemini'
 import { getRoundConfig } from './lib/roundConfig'
 import { loadAgents, saveAgentToStorage, deleteAgentFromStorage } from './lib/agents_manager'
 import { MOCK_PROJECTS, MOCK_MESSAGES } from './lib/mockData'
@@ -84,6 +84,8 @@ function App() {
   const [groundingEnabled, setGroundingEnabled] = useState(false)
   const [followUpInput, setFollowUpInput] = useState('')
   const [gateOpen, setGateOpen] = useState(null) // 'r1' | 'final' | null
+  const [meetingDesign, setMeetingDesign] = useState(null)
+  const [isDesigning, setIsDesigning] = useState(false)
   const timelineEndRef = useRef(null)
 
   // ── Agents & Knowledge ──────────────────────────────────────────────────────
@@ -238,6 +240,43 @@ function App() {
     setGroundingEnabled(false);
     setFollowUpInput('');
     setGateOpen(null);
+    setMeetingDesign(null);
+  };
+
+  const requestMeetingDesign = async () => {
+    if (!activeProject || isDesigning) return;
+    setIsDesigning(true);
+    try {
+      const design = await suggestMeetingDesign({
+        project: activeProject,
+        agents: customAgents,
+        locale: i18n.resolvedLanguage === 'en' ? 'en' : 'ja',
+      });
+      if (design) {
+        setMeetingDesign(design);
+      } else {
+        alert(t('design.failed'));
+      }
+    } finally {
+      setIsDesigning(false);
+    }
+  };
+
+  const applyMeetingDesign = () => {
+    if (!meetingDesign) return;
+    if ([3, 5, 7].includes(meetingDesign.recommended_rounds)) {
+      setMaxRounds(meetingDesign.recommended_rounds);
+    }
+    if (meetingDesign.focus_points) {
+      setSetupFocusPoints(meetingDesign.focus_points);
+    }
+    if (meetingDesign.recommended_theme) {
+      const matchedTheme = THEMES.find(th =>
+        th.id === meetingDesign.recommended_theme || th.label === meetingDesign.recommended_theme
+      );
+      if (matchedTheme) setSetupTheme(matchedTheme.id);
+    }
+    setMeetingDesign(null);
   };
 
   const viewHistorySession = async (histSession) => {
@@ -353,7 +392,8 @@ function App() {
           const response = await generateAgentResponseStream(
             agentKey, sessionObj, activeProject, 1, currentMessages, extendedContext, customAgents,
             (partial) => setStreamingContent({ agent_role: agentKey, content: partial, round_number: 1 }),
-            cfg.type
+            cfg.type,
+            groundingEnabled
           );
 
           setStreamingContent(null);
@@ -432,7 +472,8 @@ function App() {
           const response = await generateAgentResponseStream(
             agentKey, session, activeProject, nextR, currentMessages, roundContext, customAgents,
             (partial) => setStreamingContent({ agent_role: agentKey, content: partial, round_number: nextR }),
-            cfg.type
+            cfg.type,
+            groundingEnabled
           );
 
           setStreamingContent(null);
@@ -1038,10 +1079,16 @@ function App() {
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                   <h3 style={{ fontSize: '0.95rem' }}>{t('themes.select_heading')}</h3>
-                  <button className="btn-icon" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-                    onClick={() => setShowThemeEditor(true)}>
-                    <PlusCircle size={14} /> {t('themes.add_theme')}
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button className="btn-icon" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      onClick={requestMeetingDesign} disabled={isDesigning}>
+                      ✨ {isDesigning ? t('design.designing') : t('design.suggest_button')}
+                    </button>
+                    <button className="btn-icon" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      onClick={() => setShowThemeEditor(true)}>
+                      <PlusCircle size={14} /> {t('themes.add_theme')}
+                    </button>
+                  </div>
                 </div>
                 <div className="theme-grid-main">
                   {THEMES.map(th => (
@@ -1300,6 +1347,56 @@ function App() {
           </div>
         )}
       </div>
+
+      {meetingDesign ? (
+        <div
+          onClick={() => setMeetingDesign(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{
+            background: '#fff', borderRadius: 6, padding: '1.5rem 1.75rem',
+            maxWidth: 560, width: '94vw', maxHeight: '85vh', overflowY: 'auto',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.18)',
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: '0.75rem' }}>✨ {t('design.modal_title')}</h3>
+            <p style={{ color: 'var(--secondary)', fontSize: '0.85rem', lineHeight: 1.55, marginBottom: '1rem' }}>
+              {t('design.modal_intro')}
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '6px 12px', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              <strong>{t('design.field_theme')}</strong><span>{meetingDesign.recommended_theme || '—'}</span>
+              <strong>{t('design.field_rounds')}</strong><span>{meetingDesign.recommended_rounds} {t('setup.depth_value', { n: meetingDesign.recommended_rounds }).split(' ')[1] || ''}</span>
+              <strong>{t('design.field_minutes')}</strong><span>{meetingDesign.estimated_minutes != null ? `${meetingDesign.estimated_minutes} 分` : '—'}</span>
+              <strong>{t('design.field_focus')}</strong><span>{meetingDesign.focus_points || '—'}</span>
+            </div>
+
+            {meetingDesign.key_risks?.length > 0 && (
+              <>
+                <strong style={{ fontSize: '0.85rem' }}>{t('design.field_risks')}</strong>
+                <ul style={{ fontSize: '0.85rem', marginTop: '0.3rem', paddingLeft: '1.25rem' }}>
+                  {meetingDesign.key_risks.map((r, i) => <li key={i}>{r}</li>)}
+                </ul>
+              </>
+            )}
+            {meetingDesign.missing_information?.length > 0 && (
+              <>
+                <strong style={{ fontSize: '0.85rem' }}>{t('design.field_missing')}</strong>
+                <ul style={{ fontSize: '0.85rem', marginTop: '0.3rem', paddingLeft: '1.25rem' }}>
+                  {meetingDesign.missing_information.map((r, i) => <li key={i}>{r}</li>)}
+                </ul>
+              </>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem', flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" onClick={applyMeetingDesign}>{t('design.apply_button')}</button>
+              <button className="btn" onClick={() => setMeetingDesign(null)}>{t('design.dismiss_button')}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {gateOpen ? (
         <div
