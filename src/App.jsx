@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import './index.css'
 import { supabase } from './lib/supabase'
-import { generateAgentResponseStream, generateAgentResponse, synthesizeDecisionMemo, AGENT_ROLES } from './lib/gemini'
+import { generateAgentResponseStream, generateAgentResponse, synthesizeDecisionMemo, extractConfidence, AGENT_ROLES } from './lib/gemini'
+import { getRoundConfig } from './lib/roundConfig'
 import { loadAgents, saveAgentToStorage, deleteAgentFromStorage } from './lib/agents_manager'
 import { MOCK_PROJECTS, MOCK_MESSAGES } from './lib/mockData'
 import {
@@ -19,6 +20,29 @@ const EMPTY_PROJECT_FORM = {
 };
 
 const SESSION_STORAGE_KEY = 'mads_session_v2';
+
+const CONFIDENCE_COLORS = {
+  high:   { bg: '#d1fae5', fg: '#047857' },
+  medium: { bg: '#fef3c7', fg: '#b45309' },
+  low:    { bg: '#fee2e2', fg: '#b91c1c' },
+};
+
+function ConfidenceBadge({ level, t }) {
+  const palette = CONFIDENCE_COLORS[level];
+  if (!palette) return null;
+  return (
+    <span style={{
+      fontSize: '0.7rem',
+      padding: '2px 6px',
+      borderRadius: 3,
+      backgroundColor: palette.bg,
+      color: palette.fg,
+      fontWeight: 600,
+    }}>
+      {t(`confidence.${level}`)}
+    </span>
+  );
+}
 
 function App() {
   const { t, i18n } = useTranslation()
@@ -56,6 +80,10 @@ function App() {
   // ── Streaming state ─────────────────────────────────────────────────────────
   const [streamingContent, setStreamingContent] = useState(null)
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
+  const [maxRounds, setMaxRounds] = useState(5)
+  const [groundingEnabled, setGroundingEnabled] = useState(false)
+  const [followUpInput, setFollowUpInput] = useState('')
+  const [gateOpen, setGateOpen] = useState(null) // 'r1' | 'final' | null
   const timelineEndRef = useRef(null)
 
   // ── Agents & Knowledge ──────────────────────────────────────────────────────
@@ -130,6 +158,8 @@ function App() {
         setSession(state.session);
         setMessages(state.messages);
         setCurrentRound(state.currentRound || 1);
+        if (state.maxRounds) setMaxRounds(state.maxRounds);
+        if (typeof state.groundingEnabled === 'boolean') setGroundingEnabled(state.groundingEnabled);
         if (state.setupContext) setSetupContext(state.setupContext);
         if (state.setupConstraints) setSetupConstraints(state.setupConstraints);
         if (state.setupGoal) setSetupGoal(state.setupGoal);
@@ -144,6 +174,7 @@ function App() {
       try {
         sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
           session, messages, currentRound, activeProjectId: activeProject.id,
+          maxRounds, groundingEnabled,
           setupContext, setupConstraints, setupGoal, setupFocusPoints, setupPrfaq,
         }));
       } catch { /* storage quota exceeded */ }
@@ -203,6 +234,10 @@ function App() {
     setSetupFocusPoints('');
     setSetupPrfaq('');
     setStreamingContent(null);
+    setMaxRounds(5);
+    setGroundingEnabled(false);
+    setFollowUpInput('');
+    setGateOpen(null);
   };
 
   const viewHistorySession = async (histSession) => {
@@ -234,6 +269,8 @@ function App() {
     setSession({ ...histSession, readonly: false });
     setMessages(msgs || []);
     setCurrentRound(histSession.current_round || 1);
+    setMaxRounds(histSession.max_rounds || 5);
+    setGroundingEnabled(histSession.grounding_enabled || false);
     restoreSetupContext(histSession.setup_context);
     setLoading(false);
   };
@@ -283,6 +320,8 @@ function App() {
             theme_type: validThemeId,
             setup_context: extendedContext,
             current_round: 1,
+            max_rounds: maxRounds,
+            grounding_enabled: groundingEnabled,
           })
           .select().single();
         if (error) throw new Error(error.message);
@@ -304,29 +343,33 @@ function App() {
           setMessages(prev => [...prev, { agent_role: msg.role, content: msg.content, round_number: 1 }]);
         }
       } else {
-        const agentList = Object.keys(customAgents).filter(k => k !== 'CEO' && customAgents[k].is_active);
+        const cfg = getRoundConfig(1, maxRounds, customAgents);
         let currentMessages = [];
 
-        for (const agentKey of agentList) {
+        for (const agentKey of cfg.agents) {
           setThinkingAgent(agentKey);
           setStreamingContent({ agent_role: agentKey, content: '', round_number: 1 });
 
           const response = await generateAgentResponseStream(
             agentKey, sessionObj, activeProject, 1, currentMessages, extendedContext, customAgents,
-            (partial) => setStreamingContent({ agent_role: agentKey, content: partial, round_number: 1 })
+            (partial) => setStreamingContent({ agent_role: agentKey, content: partial, round_number: 1 }),
+            cfg.type
           );
 
           setStreamingContent(null);
           setThinkingAgent(null);
 
           if (response) {
-            const newMsg = { agent_role: response.role, content: response.content, round_number: 1 };
+            const { confidence, cleaned } = extractConfidence(response.content);
+            const newMsg = { agent_role: response.role, content: cleaned, confidence, round_number: 1 };
             currentMessages = [...currentMessages, newMsg];
             setMessages(prev => [...prev, newMsg]);
             await saveMessages(sessionData.id, 1, [newMsg]);
           }
           await new Promise(r => setTimeout(r, 600));
         }
+        // Open the post-Round-1 HITL gate
+        setGateOpen('r1');
       }
     } catch (err) {
       console.error(err);
@@ -345,7 +388,8 @@ function App() {
       session_id: sessionId,
       round_number: round,
       agent_role: m.agent_role || m.role,
-      content: m.content
+      content: m.content,
+      confidence: m.confidence || null,
     }));
     await supabase.from('agent_messages').insert(records);
   };
@@ -359,7 +403,7 @@ function App() {
 
     if (!isDemo && session.id) {
       const sessionPatch = { current_round: nextR };
-      if (nextR >= 5) sessionPatch.status = 'completed';
+      if (nextR >= maxRounds) sessionPatch.status = 'completed';
       await supabase.from('decision_sessions').update(sessionPatch).eq('id', session.id);
     }
 
@@ -371,15 +415,10 @@ function App() {
           setMessages(prev => [...prev, { agent_role: msg.role, content: msg.content, round_number: nextR }]);
         }
       } else {
-        let agents = [];
-        if (nextR === 2) agents = Object.keys(customAgents).filter(k => k !== 'CEO' && customAgents[k].is_active);
-        else if (nextR === 3) agents = ['CEO'];
-        else if (nextR === 4) agents = Object.keys(customAgents).filter(k => k !== 'CEO' && customAgents[k].is_active);
-        else if (nextR === 5) agents = ['CEO'];
-
+        const cfg = getRoundConfig(nextR, maxRounds, customAgents);
         let currentMessages = [...messages];
 
-        for (const agentKey of agents) {
+        for (const agentKey of cfg.agents) {
           setThinkingAgent(agentKey);
           setStreamingContent({ agent_role: agentKey, content: '', round_number: nextR });
 
@@ -392,20 +431,25 @@ function App() {
           };
           const response = await generateAgentResponseStream(
             agentKey, session, activeProject, nextR, currentMessages, roundContext, customAgents,
-            (partial) => setStreamingContent({ agent_role: agentKey, content: partial, round_number: nextR })
+            (partial) => setStreamingContent({ agent_role: agentKey, content: partial, round_number: nextR }),
+            cfg.type
           );
 
           setStreamingContent(null);
           setThinkingAgent(null);
 
           if (response) {
-            const newMsg = { agent_role: response.role, content: response.content, round_number: nextR };
+            const { confidence, cleaned } = extractConfidence(response.content);
+            const newMsg = { agent_role: response.role, content: cleaned, confidence, round_number: nextR };
             currentMessages = [...currentMessages, newMsg];
             setMessages(prev => [...prev, newMsg]);
             await saveMessages(session.id, nextR, [newMsg]);
           }
           await new Promise(r => setTimeout(r, 600));
         }
+
+        // Open the final-round HITL gate when CEO has just spoken
+        if (nextR === maxRounds) setGateOpen('final');
       }
     } catch (err) {
       console.error(err);
@@ -415,6 +459,27 @@ function App() {
       setThinkingAgent(null);
       setStreamingContent(null);
     }
+  };
+
+  // Submit a follow-up "what if X?" question after the final round, then run
+  // a follow_up round automatically (one extra exchange with all agents).
+  const submitFollowUp = async () => {
+    if (!followUpInput.trim() || !session || isThinking) return;
+    const userMsg = { agent_role: 'USER', content: followUpInput, round_number: currentRound };
+    setMessages(prev => [...prev, userMsg]);
+    await saveMessages(session.id, currentRound, [userMsg]);
+    setFollowUpInput('');
+    await handleNextRound();
+  };
+
+  // Record HITL gate decision (採用/却下/保留) to the session JSONB.
+  const recordGateDecision = async (gate, decision) => {
+    setGateOpen(null);
+    if (isDemo || !session?.id) return;
+    const existing = session.gate_responses || {};
+    const next = { ...existing, [gate]: { decision, at: new Date().toISOString() } };
+    await supabase.from('decision_sessions').update({ gate_responses: next }).eq('id', session.id);
+    setSession(prev => prev ? { ...prev, gate_responses: next } : prev);
   };
 
   const submitUserInput = async () => {
@@ -917,6 +982,28 @@ function App() {
                     </p>
                   </div>
                 </div>
+                <div className="form-grid" style={{ marginTop: '1rem' }}>
+                  <div className="form-group">
+                    <label>{t('setup.depth_label')}</label>
+                    <input type="range" min={3} max={7} step={2} value={maxRounds}
+                      onChange={e => setMaxRounds(parseInt(e.target.value, 10))}
+                      style={{ width: '100%' }} />
+                    <p style={{ fontSize: '0.78rem', color: 'var(--secondary)', marginTop: '0.3rem' }}>
+                      {t('setup.depth_value', { n: maxRounds })}
+                    </p>
+                  </div>
+                  <div className="form-group">
+                    <label>{t('setup.grounding_label')}</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', fontWeight: 400, paddingTop: '6px' }}>
+                      <input type="checkbox" checked={groundingEnabled}
+                        onChange={e => setGroundingEnabled(e.target.checked)} />
+                      <span>{t('setup.grounding_value')}</span>
+                    </label>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--secondary)', marginTop: '0.3rem' }}>
+                      {t('setup.grounding_hint')}
+                    </p>
+                  </div>
+                </div>
                 <button className="btn btn-primary" style={{ width:'100%', marginTop:'1.5rem', padding:'1rem' }}
                   onClick={startNewSession} disabled={loading}>
                   {loading ? t('common.preparing') : t('setup.start')}
@@ -1061,7 +1148,7 @@ function App() {
                   {session.readonly ? t('session.back_history') : t('session.back_list')}
                 </button>
                 <h2 style={{ fontSize: '1.05rem' }}>
-                  {session.readonly ? t('session.history_view_prefix') : (currentRound === 5 ? t('session.round_finished') : t('session.round_n', { n: currentRound }))}
+                  {session.readonly ? t('session.history_view_prefix') : (currentRound >= maxRounds ? t('session.round_finished') : t('session.round_n', { n: currentRound }))}
                   {session.theme_type}
                 </h2>
               </div>
@@ -1081,7 +1168,10 @@ function App() {
                     {getAgentInitials(msg.agent_role)}
                   </div>
                   <div className="bubble">
-                    <div className="role-name">{msg.agent_role} — Round {msg.round_number}</div>
+                    <div className="role-name" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>{msg.agent_role} — Round {msg.round_number}</span>
+                      {msg.confidence ? <ConfidenceBadge level={msg.confidence} t={t} /> : null}
+                    </div>
                     <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
                   </div>
                 </div>
@@ -1113,7 +1203,7 @@ function App() {
               <div ref={timelineEndRef} style={{ height: 1 }} />
             </div>
 
-            {!session.readonly && currentRound < 5 && messages.length > 0 && !isThinking && (
+            {!session.readonly && currentRound < maxRounds && messages.length > 0 && !isThinking && (
               <button
                 className="btn btn-primary floating-next-round"
                 onClick={handleNextRound}
@@ -1123,7 +1213,7 @@ function App() {
                 {t('session.next_round', { n: currentRound + 1 })}
               </button>
             )}
-            {(currentRound >= 5 || session.readonly) && messages.length > 0 && (
+            {(currentRound >= maxRounds || session.readonly) && messages.length > 0 && (
               <button
                 className="btn floating-download-memo"
                 onClick={downloadSessionSummary}
@@ -1163,22 +1253,39 @@ function App() {
           <div className="card" style={{ marginBottom: '1.5rem' }}>
             <h3 style={{ fontSize: '0.82rem', marginBottom: '0.6rem' }}>{t('right_panel.progress_heading')}</h3>
             <div style={{ display: 'flex', gap: '3px' }}>
-              {[1,2,3,4,5].map(r => (
+              {Array.from({ length: maxRounds }, (_, i) => i + 1).map(r => (
                 <div key={r} style={{
-                  flex: 1, height: '5px', borderRadius: '3px',
+                  flex: 1, height: '5px',
                   background: r <= currentRound ? 'var(--accent)' : 'var(--border)',
                   transition: 'background 0.3s'
                 }} />
               ))}
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--secondary)', marginTop: '0.4rem' }}>
-              {t('right_panel.round_n_of_5', { n: currentRound })}
-              {currentRound === 5 ? t('right_panel.completed_mark') : ''}
+              {t('right_panel.round_n_of_max', { n: currentRound, max: maxRounds })}
+              {currentRound >= maxRounds ? t('right_panel.completed_mark') : ''}
             </p>
           </div>
         )}
 
-        {currentRound === 3 && session && !session.readonly && (
+        {currentRound >= maxRounds && session && !session.readonly && (
+          <div className="card" style={{ marginBottom: '1.5rem' }}>
+            <h3 style={{ marginBottom: '0.6rem' }}>{t('right_panel.followup_heading')}</h3>
+            <p style={{ fontSize: '0.78rem', color: 'var(--secondary)', marginBottom: '0.75rem', lineHeight: '1.55' }}>
+              {t('right_panel.followup_desc')}
+            </p>
+            <textarea value={followUpInput} onChange={e => setFollowUpInput(e.target.value)}
+              placeholder={t('right_panel.followup_placeholder')}
+              style={{ width: '100%', minHeight: '80px', marginBottom: '0.5rem' }} />
+            <button className="btn btn-primary" style={{ width: '100%' }}
+              onClick={submitFollowUp} disabled={isThinking || !followUpInput.trim()}>
+              {t('right_panel.followup_submit')}
+            </button>
+          </div>
+        )}
+
+        {session && !session.readonly && currentRound > 1 && currentRound < maxRounds &&
+         getRoundConfig(currentRound, maxRounds, customAgents).type === 'ceo_check' && (
           <div className="card">
             <h3 style={{ marginBottom: '0.6rem' }}>{t('right_panel.ceo_response_heading')}</h3>
             <p style={{ fontSize: '0.78rem', color: 'var(--secondary)', marginBottom: '0.75rem', lineHeight: '1.55' }}>
@@ -1193,6 +1300,55 @@ function App() {
           </div>
         )}
       </div>
+
+      {gateOpen ? (
+        <div
+          onClick={() => setGateOpen(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fff', borderRadius: 6, padding: '1.5rem 1.75rem',
+              maxWidth: 480, width: '92vw', boxShadow: '0 20px 50px rgba(0,0,0,0.18)',
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: '0.5rem' }}>
+              {gateOpen === 'r1' ? t('hitl.r1_title') : t('hitl.final_title')}
+            </h3>
+            <p style={{ color: 'var(--secondary)', fontSize: '0.88rem', lineHeight: 1.55, marginBottom: '1.25rem' }}>
+              {gateOpen === 'r1' ? t('hitl.r1_desc') : t('hitl.final_desc')}
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {gateOpen === 'r1' ? (
+                <>
+                  <button className="btn btn-primary" onClick={() => recordGateDecision('r1', 'continue')}>
+                    {t('hitl.r1_continue')}
+                  </button>
+                  <button className="btn" onClick={() => recordGateDecision('r1', 'edit_setup')}>
+                    {t('hitl.r1_edit')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="btn btn-primary" onClick={() => recordGateDecision('final', 'adopt')}>
+                    {t('hitl.final_adopt')}
+                  </button>
+                  <button className="btn" onClick={() => recordGateDecision('final', 'reject')}>
+                    {t('hitl.final_reject')}
+                  </button>
+                  <button className="btn" onClick={() => recordGateDecision('final', 'pending')}>
+                    {t('hitl.final_pending')}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

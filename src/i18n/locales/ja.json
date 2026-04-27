@@ -71,11 +71,16 @@
     "duration_label": "工期:",
     "progress_heading": "進行状況",
     "round_n_of_5": "Round {{n}} / 5",
+    "round_n_of_max": "Round {{n}} / {{max}}",
     "completed_mark": " ✅ 完了",
     "ceo_response_heading": "📝 CEO要請への回答",
-    "ceo_response_desc": "CEOが特定した不足情報を入力してください。Round 4の議論に反映されます。",
+    "ceo_response_desc": "CEOが特定した不足情報を入力してください。次のラウンドの議論に反映されます。",
     "ceo_response_placeholder": "例：近隣住民との説明会は未実施。追加予算は発注者と未交渉。保険は通常の建設保険のみ。",
-    "send_response": "回答を送信"
+    "send_response": "回答を送信",
+    "followup_heading": "💬 追加質問 (感度分析)",
+    "followup_desc": "「もしXが変わったら？」を投げかけると、全員が新しい条件で1ラウンド回答します。",
+    "followup_placeholder": "例：もし鉄骨遅延が12週に延びたら方針はどう変わる？",
+    "followup_submit": "▶ 追加ラウンドを実行"
   },
   "project_detail": {
     "info_client": "施主",
@@ -108,6 +113,11 @@
     "constraints_label": "制約事項",
     "goal_label": "目指すゴール",
     "focus_points_label": "特に重視してほしい視点 (論点設定)",
+    "depth_label": "議論の深さ (ラウンド数)",
+    "depth_value": "{{n}} ラウンド",
+    "grounding_label": "Web検索ファクトチェック",
+    "grounding_value": "Gemini Google Search Grounding を有効化",
+    "grounding_hint": "ON にすると Round 1 / 4 のみ最新ニュースや法令を AI が参照します",
     "prfaq_label": "PRFAQ (完成時のニュース記事 + 想定FAQ)",
     "optional_suffix": "(任意)",
     "context_placeholder": "例：台風の影響で基礎工事が2週間遅延。設備工事との工程調整が必要な状況です。現在の達成率は全体の35%。",
@@ -134,6 +144,22 @@
     "history_heading": "過去の議論履歴",
     "view_history": "閲覧 →",
     "resume_session": "▶ 続きから"
+  },
+  "confidence": {
+    "high": "確信度: 高",
+    "medium": "確信度: 中",
+    "low": "確信度: 低"
+  },
+  "hitl": {
+    "r1_title": "Round 1 終了 — 論点・参加者の確認",
+    "r1_desc": "AI が提示した論点と参加者構成で本会議を進めますか？ 修正したい場合は一旦戻って setup を編集してください。",
+    "r1_continue": "✓ このまま続ける",
+    "r1_edit": "戻って設定を編集",
+    "final_title": "最終決定 — 採用しますか？",
+    "final_desc": "CEO の最終決定を組織として採用するか判断してください。判断は次回会議の参考のため記録されます。",
+    "final_adopt": "✓ 採用",
+    "final_reject": "✗ 却下",
+    "final_pending": "⏸ 保留"
   },
   "welcome": {
     "title": "意思決定議論を開始",

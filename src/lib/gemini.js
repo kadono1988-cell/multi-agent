@@ -10,6 +10,7 @@ const MODEL_NAME = "gemini-2.5-flash-lite";
 export const AGENT_ROLES = DEFAULT_AGENTS;
 
 const BREVITY_INSTRUCTION = "\n【重要】回答は簡潔にまとめてください。各セクションは最大3つの箇条書きとし、全体で500文字程度に収めてください。";
+const CONFIDENCE_INSTRUCTION = "\n【確信度の付記】回答の最終行に必ず `[確信度: 高]` `[確信度: 中]` `[確信度: 低]` のいずれかを単独で付けてください。判断材料が十分なら高、不確実性が大きければ低を選ぶこと。";
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ async function fetchRAGContext(project) {
   }
 }
 
-function buildAgentPrompt(agentKey, session, project, roundNumber, previousMessages, setupContext, roles, cases, ragContext) {
+function buildAgentPrompt(agentKey, session, project, roundNumber, previousMessages, setupContext, roles, cases, ragContext, roundType = null) {
   const role = roles[agentKey];
 
   const projectDetails = `
@@ -74,7 +75,11 @@ function buildAgentPrompt(agentKey, session, project, roundNumber, previousMessa
   let prompt = '';
   let systemInstruction = `あなたは建設会社の${role.name}です。${role.description} スタイル：${role.style}${focusInjection}`;
 
-  if (roundNumber === 1) {
+  // Map round → prompt template. Prefer explicit roundType (Bundle 2);
+  // fall back to legacy round-number mapping for older callers.
+  const type = roundType || legacyRoundType(roundNumber);
+
+  if (type === 'initial') {
     prompt = `プロジェクト「${project.name}」に関する意思決定議論を開始します。
 テーマ：${session.theme_type}
 ${projectDetails}
@@ -89,9 +94,9 @@ ${ragContext}
 3. 推奨するアプローチ
 4. 潜在的リスク
 ※過去事例が参考になる場合は、必ず名称を挙げて引用してください。
-${BREVITY_INSTRUCTION}`;
+${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
 
-  } else if (roundNumber === 2) {
+  } else if (type === 'feedback') {
     const prevRoundMessages = previousMessages.map(m => `${m.agent_role}: ${m.content}`).join('\n\n');
     systemInstruction += `。他のメンバーと矛盾点や甘い見積もりを指摘してください。`;
     prompt = `他のメンバーの意見を聞いて、以下の議論を深めてください。
@@ -103,9 +108,9 @@ ${prevRoundMessages}
 2. 自身の提案の修正・強化
 3. 反論に対する再反論
 ※「PMさんの懸念については…」のように他メンバーの意見を直接引用してください。
-${BREVITY_INSTRUCTION}`;
+${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
 
-  } else if (roundNumber === 3) {
+  } else if (type === 'ceo_check') {
     const prevRoundMessages = previousMessages.map(m => `${m.agent_role}: ${m.content}`).join('\n\n');
     systemInstruction = `あなたは建設会社の${role.name}です。経営層として不足情報の特定に集中してください。`;
     prompt = `専門家たちの議論を読み、意思決定のために不足している情報を最大3つ特定してください。
@@ -116,9 +121,9 @@ ${prevRoundMessages}
 1. 議論のサマリー
 2. 不足している具体的情報 (Top 3)
 3. その理由
-${BREVITY_INSTRUCTION}`;
+${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
 
-  } else if (roundNumber === 4) {
+  } else if (type === 'final_views') {
     const userInputs = previousMessages.filter(m => m.agent_role === 'USER').map(m => m.content).join('\n');
     const prevRoundMessages = previousMessages.filter(m => m.agent_role !== 'USER').map(m => `${m.agent_role}: ${m.content}`).join('\n\n');
     prompt = `【ユーザーからの追加情報】
@@ -128,9 +133,9 @@ ${userInputs || '（情報提供なし）'}
 ${prevRoundMessages}
 
 上記を踏まえ、専門家として最終的な見解を述べてください。
-${BREVITY_INSTRUCTION}`;
+${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
 
-  } else if (roundNumber === 5) {
+  } else if (type === 'ceo_final') {
     const allDiscussion = previousMessages.map(m => `${m.agent_role}: ${m.content}`).join('\n\n');
     prompt = `【全ラウンドの議論】
 ${allDiscussion}
@@ -139,10 +144,52 @@ ${allDiscussion}
 1. 最終決定
 2. 判断の根拠
 3. 実行に向けた具体的指示
-${BREVITY_INSTRUCTION}`;
+${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
+
+  } else if (type === 'follow_up') {
+    // After the final CEO decision, the user asks "what if X?". Every active
+    // agent (incl. CEO) responds once with the new condition factored in.
+    const userQuestion = [...previousMessages].reverse().find(m => m.agent_role === 'USER')?.content || '';
+    const allDiscussion = previousMessages.filter(m => m.agent_role !== 'USER').map(m => `${m.agent_role}: ${m.content}`).join('\n\n');
+    prompt = `【追加の問いかけ (ユーザーから)】
+${userQuestion}
+
+【これまでの全議論】
+${allDiscussion}
+
+この追加条件を踏まえて、当初の決定をどう修正・補強すべきか、あなたの専門領域から一言で述べてください。元の結論を変える必要があれば明記してください。
+${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
   }
 
   return { prompt, systemInstruction };
+}
+
+function legacyRoundType(round) {
+  // Preserve old hardcoded R1-R5 mapping for any caller that hasn't migrated.
+  if (round === 1) return 'initial';
+  if (round === 2) return 'feedback';
+  if (round === 3) return 'ceo_check';
+  if (round === 4) return 'final_views';
+  if (round === 5) return 'ceo_final';
+  return 'feedback';
+}
+
+// Parse `[確信度: 高/中/低]` (or English variants) from response trailing line.
+// Returns { confidence: 'high'|'medium'|'low'|null, cleaned: string }.
+export function extractConfidence(content) {
+  if (!content) return { confidence: null, cleaned: content };
+  const re = /\[?\s*確信度\s*[:：]\s*(高|中|低)\s*\]?\s*$/m;
+  const enRe = /\[?\s*confidence\s*[:：]\s*(high|medium|low)\s*\]?\s*$/im;
+  const m = content.match(re);
+  if (m) {
+    const map = { '高': 'high', '中': 'medium', '低': 'low' };
+    return { confidence: map[m[1]], cleaned: content.replace(re, '').trimEnd() };
+  }
+  const m2 = content.match(enRe);
+  if (m2) {
+    return { confidence: m2[1].toLowerCase(), cleaned: content.replace(enRe, '').trimEnd() };
+  }
+  return { confidence: null, cleaned: content };
 }
 
 // ── Non-streaming (fallback / REST) ──────────────────────────────────────────
@@ -183,14 +230,15 @@ async function callGemini(prompt, systemInstruction, retryCount = 0) {
 
 export const generateAgentResponse = async (
   agentKey, session, project, roundNumber,
-  previousMessages = [], setupContext = {}, customAgents = null
+  previousMessages = [], setupContext = {}, customAgents = null,
+  roundType = null
 ) => {
   const roles = customAgents || AGENT_ROLES;
   if (!roles[agentKey]) return null;
 
   const { cases, ragContext } = await fetchRAGContext(project);
   const { prompt, systemInstruction } = buildAgentPrompt(
-    agentKey, session, project, roundNumber, previousMessages, setupContext, roles, cases, ragContext
+    agentKey, session, project, roundNumber, previousMessages, setupContext, roles, cases, ragContext, roundType
   );
 
   const content = await callGemini(prompt, systemInstruction);
@@ -314,14 +362,14 @@ ${transcript}
 export const generateAgentResponseStream = async (
   agentKey, session, project, roundNumber,
   previousMessages = [], setupContext = {}, customAgents = null,
-  onChunk
+  onChunk, roundType = null
 ) => {
   const roles = customAgents || AGENT_ROLES;
   if (!roles[agentKey]) return null;
 
   const { cases, ragContext } = await fetchRAGContext(project);
   const { prompt, systemInstruction } = buildAgentPrompt(
-    agentKey, session, project, roundNumber, previousMessages, setupContext, roles, cases, ragContext
+    agentKey, session, project, roundNumber, previousMessages, setupContext, roles, cases, ragContext, roundType
   );
 
   try {

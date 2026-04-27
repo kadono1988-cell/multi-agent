@@ -71,11 +71,16 @@
     "duration_label": "Schedule:",
     "progress_heading": "Progress",
     "round_n_of_5": "Round {{n}} / 5",
+    "round_n_of_max": "Round {{n}} / {{max}}",
     "completed_mark": " ✅ Done",
     "ceo_response_heading": "📝 Reply to CEO request",
-    "ceo_response_desc": "Enter the missing information the CEO identified. It will be reflected in the Round 4 discussion.",
+    "ceo_response_desc": "Enter the missing information the CEO identified. It will be reflected in the next round of discussion.",
     "ceo_response_placeholder": "e.g., Neighborhood briefing not yet held; additional budget not yet negotiated; only standard construction insurance.",
-    "send_response": "Send reply"
+    "send_response": "Send reply",
+    "followup_heading": "💬 Follow-up question (sensitivity analysis)",
+    "followup_desc": "Pose a \"what if X changed?\" question; every agent will respond once with the new condition factored in.",
+    "followup_placeholder": "e.g., What if the steel delay stretched to 12 weeks?",
+    "followup_submit": "▶ Run follow-up round"
   },
   "project_detail": {
     "info_client": "Client",
@@ -108,6 +113,11 @@
     "constraints_label": "Constraints",
     "goal_label": "Goal",
     "focus_points_label": "Focus points (perspectives to emphasize)",
+    "depth_label": "Discussion depth (rounds)",
+    "depth_value": "{{n}} rounds",
+    "grounding_label": "Web fact-check",
+    "grounding_value": "Enable Gemini Google Search Grounding",
+    "grounding_hint": "When ON, agents pull live news/regulations during Rounds 1 & 4",
     "prfaq_label": "PRFAQ (press release + FAQ at completion)",
     "optional_suffix": "(optional)",
     "context_placeholder": "e.g., Foundation work delayed 2 weeks due to typhoon. Need to coordinate with M&E. Currently 35% complete overall.",
@@ -134,6 +144,22 @@
     "history_heading": "Past discussions",
     "view_history": "View →",
     "resume_session": "▶ Resume"
+  },
+  "confidence": {
+    "high": "Confidence: High",
+    "medium": "Confidence: Medium",
+    "low": "Confidence: Low"
+  },
+  "hitl": {
+    "r1_title": "Round 1 done — confirm focus & participants",
+    "r1_desc": "Continue with the issues and team the AI just framed, or go back to edit setup before the main discussion?",
+    "r1_continue": "✓ Continue as-is",
+    "r1_edit": "Edit setup",
+    "final_title": "Final decision — adopt?",
+    "final_desc": "Decide whether to adopt the CEO's final call. Your choice is recorded for future meetings.",
+    "final_adopt": "✓ Adopt",
+    "final_reject": "✗ Reject",
+    "final_pending": "⏸ Pending"
   },
   "welcome": {
     "title": "Start a decision discussion",
