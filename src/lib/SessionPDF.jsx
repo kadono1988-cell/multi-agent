@@ -50,7 +50,6 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     padding: 12,
     backgroundColor: COLORS.bgSoft,
-    borderRadius: 4,
     borderLeftWidth: 3,
     borderLeftStyle: "solid",
     borderLeftColor: COLORS.accent,
@@ -110,7 +109,6 @@ const styles = StyleSheet.create({
 
   calloutBox: {
     padding: 10,
-    borderRadius: 4,
     marginTop: 4,
     marginBottom: 6,
   },
@@ -153,10 +151,12 @@ const styles = StyleSheet.create({
 
   actionTable: {
     marginTop: 4,
-    borderWidth: 0.5,
-    borderStyle: "solid",
-    borderColor: COLORS.border,
-    borderRadius: 3,
+    borderTopWidth: 0.5,
+    borderTopStyle: "solid",
+    borderTopColor: COLORS.border,
+    borderBottomWidth: 0.5,
+    borderBottomStyle: "solid",
+    borderBottomColor: COLORS.border,
   },
   actionHeader: {
     flexDirection: "row",
@@ -190,7 +190,6 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 12,
     textAlign: "center",
-    letterSpacing: 2,
   },
 
   setupField: {
@@ -210,7 +209,6 @@ const styles = StyleSheet.create({
     lineHeight: 1.5,
     padding: 8,
     backgroundColor: COLORS.tableRowAlt,
-    borderRadius: 3,
   },
 
   roundBlock: {
@@ -226,7 +224,6 @@ const styles = StyleSheet.create({
     paddingRight: 10,
     backgroundColor: COLORS.accent,
     color: "#ffffff",
-    borderRadius: 3,
   },
 
   messageBlock: {
