@@ -1,5 +1,5 @@
 // Smoke test: render SessionPDF to a file to catch layout/style errors before deploy.
-// Run with: node scripts/test_pdf.mjs
+// Run with: npm run test:pdf  (uses vite-node for .jsx import support on Node 24+)
 
 import React from "react";
 import { pdf, Font } from "@react-pdf/renderer";

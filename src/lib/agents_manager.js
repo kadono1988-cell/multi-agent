@@ -64,7 +64,11 @@ async function loadAgentsFromMarkdown() {
   try {
     const idxRes = await fetch('/agents/index.json', { cache: 'no-cache' });
     if (!idxRes.ok) return null;
-    const ids = await idxRes.json();
+    const idx = await idxRes.json();
+    // Support both old flat array format and new structured format
+    // (with internal/external/all keys for tier-based organization)
+    const ids = Array.isArray(idx) ? idx : (idx.all || []);
+    if (ids.length === 0) return null;
     const out = {};
     for (const id of ids) {
       const r = await fetch(`/agents/${id}.md`, { cache: 'no-cache' });

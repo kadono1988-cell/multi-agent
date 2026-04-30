@@ -30,3 +30,4 @@ dist-ssr
 
 .vercel
 dist_test_session.pdf
+scripts/screenshots/

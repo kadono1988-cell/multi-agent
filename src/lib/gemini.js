@@ -479,15 +479,37 @@ ${langInstruction}`;
 export const suggestMeetingDesign = async ({ project, agents, locale = 'ja' }) => {
   if (!project?.name) return null;
 
-  const agentList = Object.keys(agents || {})
-    .filter(k => agents[k]?.is_active)
-    .map(k => `${k} (${agents[k].name})`).join(', ') || 'PM, CFO, COO, CEO';
+  // Group active agents by tier so the prompt presents an org chart, not a flat list.
+  // Falls back to flat presentation if no tier metadata is set (Phase 2 era).
+  const activeAgents = Object.values(agents || {}).filter(a => a?.is_active);
+  const tierGroups = { 1: [], 2: [], 3: [], 4: [], external: [] };
+  let hasTier = false;
+  for (const a of activeAgents) {
+    if (a.agent_type === 'external') { tierGroups.external.push(a); }
+    else if (a.tier && [1, 2, 3, 4].includes(Number(a.tier))) {
+      tierGroups[Number(a.tier)].push(a);
+      hasTier = true;
+    } else {
+      tierGroups[4].push(a); // legacy agents without tier default to Tier 4
+    }
+  }
+  const fmtList = (arr) => arr.map(a => `${a.id} (${a.name})`).join(', ') || '—';
+  const orgChart = hasTier ? `
+【利用可能なエージェント組織 (Tier 別)】
+- Tier 1 経営層: ${fmtList(tierGroups[1])}
+- Tier 2 部門長: ${fmtList(tierGroups[2])}
+- Tier 3 専門スタッフ: ${fmtList(tierGroups[3])}
+- Tier 4 現場・情報: ${fmtList(tierGroups[4])}
+- 外部コンサル: ${fmtList(tierGroups.external)}` : `
+【利用可能なエージェント】
+${activeAgents.map(a => `${a.id} (${a.name})`).join(', ')}`;
 
   const langInstruction = locale === 'en'
     ? 'Write all values in English.'
     : 'すべての値を日本語で記述してください。';
 
-  const prompt = `次のプロジェクトについて、4エージェント (${agentList}) で行う意思決定議論の最適な設計をJSONのみで提案してください。${langInstruction}
+  const prompt = `次のプロジェクトについて、意思決定議論の最適な設計をJSONのみで提案してください。${langInstruction}
+${orgChart}
 
 【プロジェクト】
 名称: ${project.name}
@@ -500,11 +522,21 @@ export const suggestMeetingDesign = async ({ project, agents, locale = 'ja' }) =
 備考: ${project.remarks || '特になし'}
 概要: ${project.summary || '未設定'}
 
+【参加者選定の指針】
+- **議題に関係する Tier・部門のエージェントを優先して 5-8 名選ぶ** (多すぎると議論が散漫になる)
+- Tier 1 (経営) は CEO + 案件性質に応じて 1-2 名
+- Tier 2-3 は議題のドメイン (建築/土木/法務/安全/M&A 等) に直接関わる責任者を選ぶ
+- Tier 4 (現場) は実行可能性を確認したい場合に PM・現場担当を加える
+- 外部コンサル (EXT_*) は専門領域 (法務・環境・保険・建築基準法) が議題と直結する場合のみ
+- 既存の 4 名 (PM/CFO/COO/CEO) は標準セットだが、議題によっては全員入れる必要はない
+
 【出力JSON (このスキーマ厳守・他の文字列を一切出力しない)】
 {
   "recommended_theme": "delay | go_no_go | design_change のいずれか、もしくは独自テーマを文字列で",
   "recommended_rounds": 3 | 5 | 7 のいずれか,
   "focus_points": "特に重視すべき視点を1-2文で",
+  "recommended_participants": ["上記の利用可能なエージェントの id を 5-8 個。例: T1_CEO, T2_BLDG_DIV, T3_LEGAL"],
+  "participants_rationale": "なぜこの構成にしたかを 1-2 文で簡潔に",
   "key_risks": ["想定される主要リスクを最大4件、各40字以内"],
   "missing_information": ["事前に揃えておくべき情報を最大3件、各40字以内"],
   "estimated_minutes": 議論完了に必要な目安分数 (整数)
@@ -516,10 +548,17 @@ export const suggestMeetingDesign = async ({ project, agents, locale = 'ja' }) =
     const raw = await callGemini(prompt, systemInstruction);
     const parsed = extractJsonObject(raw);
     if (!parsed) return null;
+    // Validate recommended_participants against actual agent IDs to avoid hallucinated names.
+    const validIds = new Set(activeAgents.map(a => a.id));
+    const validParticipants = Array.isArray(parsed.recommended_participants)
+      ? parsed.recommended_participants.filter(id => validIds.has(id))
+      : [];
     return {
       recommended_theme: parsed.recommended_theme || '',
       recommended_rounds: [3, 5, 7].includes(parsed.recommended_rounds) ? parsed.recommended_rounds : 5,
       focus_points: parsed.focus_points || '',
+      recommended_participants: validParticipants,
+      participants_rationale: parsed.participants_rationale || '',
       key_risks: Array.isArray(parsed.key_risks) ? parsed.key_risks : [],
       missing_information: Array.isArray(parsed.missing_information) ? parsed.missing_information : [],
       estimated_minutes: typeof parsed.estimated_minutes === 'number' ? parsed.estimated_minutes : null,

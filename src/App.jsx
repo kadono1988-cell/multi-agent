@@ -15,6 +15,30 @@ import { AuthBar } from './components/AuthBar'
 
 const CUSTOM_THEMES_KEY = 'mads_custom_themes';
 
+// Participant presets — quick selection for common meeting types
+const PARTICIPANT_PRESETS = {
+  '既定 (Classic 4)': ['PM', 'CFO', 'COO', 'CEO'],
+  '経営判断': ['CEO', 'T1_VICE_PRES', 'CFO', 'COO', 'T1_CTO', 'T2_PLANNING', 'T2_FINANCE'],
+  '現場リスク評価': ['PM', 'COO', 'T4_SAFETY', 'T4_QC', 'T4_SITE_MGR', 'T3_SAFETY_ENV', 'T3_RISK'],
+  'M&A 検討': ['CEO', 'CFO', 'T3_MA', 'T3_LEGAL', 'T2_PLANNING', 'T2_FINANCE'],
+  '海外プロジェクト': ['CEO', 'CFO', 'T2_INTL_DIV', 'T3_INTL_LEGAL', 'EXT_LEGAL'],
+  '大型受注検討': ['CEO', 'CFO', 'T2_BLDG_DIV', 'T2_SALES', 'T2_PROCUREMENT', 'T3_LEGAL'],
+  'ESG/コンプラ': ['CEO', 'COO', 'T3_ESG', 'T3_COMPLIANCE', 'T3_LEGAL', 'T3_PR_IR'],
+  'DX/技術投資': ['CEO', 'T1_CTO', 'T3_DX', 'T2_PROD_TECH', 'T4_BIM', 'T2_PLANNING'],
+  '設計変更': ['PM', 'T2_DESIGN', 'T4_DESIGNER', 'T3_QA', 'T4_BIM', 'COO'],
+  '危機対応': ['CEO', 'COO', 'T3_PR_IR', 'T3_LEGAL', 'T3_RISK', 'T3_COMPLIANCE'],
+};
+
+// Tier labels for filter tabs
+const TIER_LABELS = {
+  all: 'すべて',
+  '1': 'T1 経営',
+  '2': 'T2 部門長',
+  '3': 'T3 専門',
+  '4': 'T4 現場',
+  ext: '外部',
+};
+
 const EMPTY_PROJECT_FORM = {
   name: '', summary: '', strategic_importance: 'medium',
   client: '', duration: '', size: '', budget: '', building_usage: '', location: '', remarks: ''
@@ -92,6 +116,8 @@ function App() {
     return localStorage.getItem('mads_theme') || (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   })
   const [participants, setParticipants] = useState([]) // agent_ids for this session
+  const [participantTierFilter, setParticipantTierFilter] = useState('all') // 'all' | '1' | '2' | '3' | '4' | 'ext'
+  const [participantSearch, setParticipantSearch] = useState('')
   const [personaFiles, setPersonaFiles] = useState({}) // { [agentId]: extractedText }
   const [similarDecisions, setSimilarDecisions] = useState([])
   const [newsModalOpen, setNewsModalOpen] = useState(false)
@@ -355,6 +381,11 @@ function App() {
         th.id === meetingDesign.recommended_theme || th.label === meetingDesign.recommended_theme
       );
       if (matchedTheme) setSetupTheme(matchedTheme.id);
+    }
+    if (Array.isArray(meetingDesign.recommended_participants) && meetingDesign.recommended_participants.length > 0) {
+      // Filter to only agents that actually exist in the current roster.
+      const valid = meetingDesign.recommended_participants.filter(id => customAgents[id]);
+      if (valid.length > 0) setParticipants(valid);
     }
     setMeetingDesign(null);
   };
@@ -1030,7 +1061,7 @@ function App() {
       <header>
         <div className="logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Layout /> {t('header.title')}
-          <span className="demo-badge">{isDemo ? t('header.demo_badge') : 'v0.7'}</span>
+          <span className="demo-badge">{isDemo ? t('header.demo_badge') : 'v1.0'}</span>
           <LanguageToggle />
           <button
             className="btn-icon"
@@ -1521,35 +1552,88 @@ function App() {
                 </div>
                 <div className="form-grid" style={{ marginTop: '1rem' }}>
                   <div className="form-group full">
-                    <label>{t('setup.participants_label')}</label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginTop: 4 }}>
-                      {Object.values(customAgents)
-                        .filter(a => a?.agent_type !== 'external')
-                        .map(a => (
-                          <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', fontWeight: 400 }}>
-                            <input type="checkbox" checked={participants.includes(a.id)}
-                              onChange={e => setParticipants(prev =>
-                                e.target.checked ? [...prev, a.id] : prev.filter(x => x !== a.id)
-                              )} />
-                            <span>{a.name}</span>
-                          </label>
-                        ))}
+                    <label>{t('setup.participants_label')} <span style={{ color: 'var(--secondary)', fontWeight: 400, fontSize: '0.85em' }}>(選択中: {participants.length})</span></label>
+
+                    {/* Preset buttons */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, marginBottom: 8 }}>
+                      {Object.entries(PARTICIPANT_PRESETS).map(([name, ids]) => (
+                        <button type="button" key={name}
+                          onClick={() => setParticipants(ids.filter(id => customAgents[id]))}
+                          style={{ fontSize: '0.78rem', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: '12px', background: 'var(--card)', color: 'var(--secondary)', cursor: 'pointer' }}>
+                          {name} ({ids.length})
+                        </button>
+                      ))}
+                      <button type="button"
+                        onClick={() => setParticipants([])}
+                        style={{ fontSize: '0.78rem', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: '12px', background: 'transparent', color: 'var(--secondary)', cursor: 'pointer' }}>
+                        クリア
+                      </button>
                     </div>
-                    <p style={{ fontSize: '0.78rem', color: 'var(--secondary)', marginTop: '0.6rem', marginBottom: '0.3rem' }}>
-                      {t('setup.external_hint')}
-                    </p>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
+
+                    {/* Tier filter tabs */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                      {Object.entries(TIER_LABELS).map(([key, label]) => {
+                        const isActive = participantTierFilter === key;
+                        return (
+                          <button type="button" key={key}
+                            onClick={() => setParticipantTierFilter(key)}
+                            style={{ fontSize: '0.78rem', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: '6px', background: isActive ? 'var(--primary)' : 'var(--card)', color: isActive ? 'white' : 'var(--text)', cursor: 'pointer', fontWeight: isActive ? 600 : 400 }}>
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Search box */}
+                    <input type="search" placeholder="名前・部門で絞り込み..."
+                      value={participantSearch}
+                      onChange={e => setParticipantSearch(e.target.value)}
+                      style={{ width: '100%', padding: '6px 10px', fontSize: '0.85rem', border: '1px solid var(--border)', borderRadius: '6px', marginBottom: 8 }} />
+
+                    {/* Filtered agents grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', maxHeight: '320px', overflowY: 'auto', padding: '4px', border: '1px solid var(--border)', borderRadius: '6px' }}>
                       {Object.values(customAgents)
-                        .filter(a => a?.agent_type === 'external')
-                        .map(a => (
-                          <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', fontWeight: 400 }}>
-                            <input type="checkbox" checked={participants.includes(a.id)}
-                              onChange={e => setParticipants(prev =>
-                                e.target.checked ? [...prev, a.id] : prev.filter(x => x !== a.id)
-                              )} />
-                            <span style={{ color: 'var(--accent)' }}>+ {a.name}</span>
-                          </label>
-                        ))}
+                        .filter(a => {
+                          if (!a) return false;
+                          // Tier filter
+                          if (participantTierFilter === 'ext') {
+                            if (a.agent_type !== 'external') return false;
+                          } else if (participantTierFilter === 'all') {
+                            // pass
+                          } else {
+                            if (a.agent_type === 'external') return false;
+                            if (String(a.tier) !== participantTierFilter) return false;
+                          }
+                          // Search filter (name or department, case-insensitive)
+                          if (participantSearch) {
+                            const q = participantSearch.toLowerCase();
+                            const hay = `${a.name || ''} ${a.department || ''} ${a.id || ''}`.toLowerCase();
+                            if (!hay.includes(q)) return false;
+                          }
+                          return true;
+                        })
+                        .sort((a, b) => {
+                          // Sort by tier then by name. External last.
+                          if (a.agent_type === 'external' && b.agent_type !== 'external') return 1;
+                          if (b.agent_type === 'external' && a.agent_type !== 'external') return -1;
+                          const ta = a.tier ?? 99, tb = b.tier ?? 99;
+                          if (ta !== tb) return ta - tb;
+                          return (a.name || '').localeCompare(b.name || '', 'ja');
+                        })
+                        .map(a => {
+                          const isExt = a.agent_type === 'external';
+                          const tierBadge = isExt ? 'EXT' : `T${a.tier ?? '?'}`;
+                          return (
+                            <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', fontWeight: 400, padding: '2px 4px' }}>
+                              <input type="checkbox" checked={participants.includes(a.id)}
+                                onChange={e => setParticipants(prev =>
+                                  e.target.checked ? [...prev, a.id] : prev.filter(x => x !== a.id)
+                                )} />
+                              <span style={{ fontSize: '0.7rem', padding: '1px 5px', borderRadius: '3px', background: isExt ? 'var(--accent)' : 'var(--secondary)', color: 'white', minWidth: '28px', textAlign: 'center' }}>{tierBadge}</span>
+                              <span style={{ color: isExt ? 'var(--accent)' : 'var(--text)' }}>{a.name}</span>
+                            </label>
+                          );
+                        })}
                     </div>
                   </div>
                   <div className="form-group">
@@ -2101,6 +2185,28 @@ function App() {
               <strong>{t('design.field_minutes')}</strong><span>{meetingDesign.estimated_minutes != null ? `${meetingDesign.estimated_minutes} 分` : '—'}</span>
               <strong>{t('design.field_focus')}</strong><span>{meetingDesign.focus_points || '—'}</span>
             </div>
+
+            {meetingDesign.recommended_participants?.length > 0 && (
+              <div style={{ marginBottom: '1rem', padding: '0.75rem', background: 'var(--bg)', borderRadius: 6, border: '1px solid var(--border)' }}>
+                <strong style={{ fontSize: '0.85rem', display: 'block', marginBottom: '0.4rem' }}>👥 推奨参加者 ({meetingDesign.recommended_participants.length}名)</strong>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: '0.5rem' }}>
+                  {meetingDesign.recommended_participants.map(id => {
+                    const a = customAgents[id];
+                    if (!a) return null;
+                    const isExt = a.agent_type === 'external';
+                    const tierBadge = isExt ? 'EXT' : `T${a.tier ?? '?'}`;
+                    return (
+                      <span key={id} style={{ fontSize: '0.78rem', padding: '2px 8px', borderRadius: 12, background: isExt ? 'var(--accent)' : 'var(--secondary)', color: 'white' }}>
+                        {tierBadge} {a.name}
+                      </span>
+                    );
+                  })}
+                </div>
+                {meetingDesign.participants_rationale && (
+                  <p style={{ fontSize: '0.78rem', color: 'var(--secondary)', margin: 0, lineHeight: 1.5 }}>{meetingDesign.participants_rationale}</p>
+                )}
+              </div>
+            )}
 
             {meetingDesign.key_risks?.length > 0 && (
               <>
