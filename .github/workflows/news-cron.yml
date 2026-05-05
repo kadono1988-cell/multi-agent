@@ -1,0 +1,33 @@
+name: News Cron
+
+# CURRENTLY DISABLED — manual trigger only.
+# To enable weekly auto-run, uncomment the schedule block below
+# and add CRON_SECRET to GitHub repo secrets.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (do not insert to Supabase)'
+        required: false
+        default: 'false'
+  # schedule:
+  #   - cron: '0 0 * * 1'  # Monday 00:00 UTC = Monday 09:00 JST
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger news-cron endpoint
+        run: |
+          curl -X POST "https://multi-agent-xi.vercel.app/api/news-cron" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -m 60 \
+            --fail \
+            --silent \
+            --show-error \
+            | tee /tmp/cron_result.json
+          echo ""
+          echo "Result:"
+          cat /tmp/cron_result.json

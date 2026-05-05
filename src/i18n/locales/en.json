@@ -30,6 +30,15 @@
     "heading": "Similar past decisions",
     "intro": "Found earlier decisions that look similar to this project."
   },
+  "news_suggestions": {
+    "badge_title": "📰 Pending news suggestions",
+    "panel_title": "News suggestions queue",
+    "panel_empty": "No pending news suggestions",
+    "apply": "✓ Create project",
+    "dismiss": "✕ Dismiss",
+    "source": "Source",
+    "fetched": "Fetched"
+  },
   "news": {
     "button": "Spin up topic from news",
     "modal_title": "Generate a discussion from news",

@@ -30,6 +30,15 @@
     "heading": "類似する過去の判断",
     "intro": "このプロジェクトに似た過去の意思決定が見つかりました。"
   },
+  "news_suggestions": {
+    "badge_title": "📰 保留中のニュース提案",
+    "panel_title": "ニュース提案キュー",
+    "panel_empty": "保留中のニュース提案はありません",
+    "apply": "✓ プロジェクト作成",
+    "dismiss": "✕ 却下",
+    "source": "ソース",
+    "fetched": "取得日"
+  },
   "news": {
     "button": "ニュースから議題を起こす",
     "modal_title": "ニュース記事から議題を生成",

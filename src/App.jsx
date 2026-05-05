@@ -12,6 +12,8 @@ import {
 } from 'lucide-react'
 import { LanguageToggle } from './components/LanguageToggle'
 import { AuthBar } from './components/AuthBar'
+import { NewsSuggestionsPanel } from './components/NewsSuggestionsPanel'
+import { fetchPendingSuggestions, markSuggestionApplied } from './lib/news_suggestions'
 
 const CUSTOM_THEMES_KEY = 'mads_custom_themes';
 
@@ -124,6 +126,8 @@ function App() {
   const [newsText, setNewsText] = useState('')
   const [newsSuggestion, setNewsSuggestion] = useState(null)
   const [isAnalyzingNews, setIsAnalyzingNews] = useState(false)
+  const [newsSuggestions, setNewsSuggestions] = useState([])
+  const [suggestionsPanelOpen, setSuggestionsPanelOpen] = useState(false)
   const [analyticsData, setAnalyticsData] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   const [briefingDoc, setBriefingDoc] = useState(null)
@@ -212,6 +216,7 @@ function App() {
     } else {
       fetchProjects();
       fetchReferenceCases();
+      fetchPendingSuggestions().then(setNewsSuggestions).catch(() => {});
     }
     loadExpertAgents();
   }, [isDemo]);
@@ -1072,6 +1077,22 @@ function App() {
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
           <AuthBar t={t} />
+          {!isDemo && newsSuggestions.length > 0 && (
+            <button
+              className="btn-icon"
+              title={t('news_suggestions.badge_title')}
+              onClick={() => setSuggestionsPanelOpen(true)}
+              style={{ position: 'relative', fontSize: '0.78rem' }}
+            >
+              📰
+              <span style={{
+                position: 'absolute', top: -4, right: -4,
+                background: 'var(--accent)', color: '#fff',
+                borderRadius: '50%', width: 16, height: 16,
+                fontSize: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>{newsSuggestions.length}</span>
+            </button>
+          )}
           {currentUser ? (
             <button className="btn-icon" style={{ fontSize: '0.78rem' }}
               onClick={() => setPrivateMode(p => !p)}
@@ -2117,6 +2138,36 @@ function App() {
           </div>
         </div>
       ) : null}
+
+      {suggestionsPanelOpen && (
+        <NewsSuggestionsPanel
+          suggestions={newsSuggestions}
+          onClose={() => setSuggestionsPanelOpen(false)}
+          onDismissed={(id) => setNewsSuggestions(prev => prev.filter(s => s.id !== id))}
+          onApply={async (suggestion) => {
+            const sug = suggestion.suggested_project || {};
+            const newProject = {
+              name: sug.project_name || suggestion.source_title,
+              summary: sug.project_summary || '',
+              type: sug.project_type || 'Other',
+              strategic_importance: sug.strategic_importance || 'medium',
+            };
+            const { data, error } = await supabase.from('projects')
+              .insert({ ...newProject, owner_id: currentUser?.id || null })
+              .select().single();
+            if (error) { alert(`Failed: ${error.message}`); return; }
+            await markSuggestionApplied(suggestion.id, data.id);
+            setNewsSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
+            await fetchProjects();
+            setActiveProject(data);
+            if (sug.user_context) setSetupContext(sug.user_context);
+            if (sug.constraints) setSetupConstraints(sug.constraints);
+            if (sug.goal) setSetupGoal(sug.goal);
+            if (sug.focus_points) setSetupFocusPoints(sug.focus_points);
+            setSuggestionsPanelOpen(false);
+          }}
+        />
+      )}
 
       {newsModalOpen ? (
         <div onClick={() => setNewsModalOpen(false)} style={{
