@@ -1,4 +1,4 @@
-import { supabase } from './supabase.js';
+import { supabase } from './supabase';
 
 export async function fetchPendingSuggestions() {
   const { data, error } = await supabase
@@ -11,7 +11,7 @@ export async function fetchPendingSuggestions() {
   return data ?? [];
 }
 
-export async function dismissSuggestion(id, reason = '') {
+export async function dismissSuggestion(id: string, reason = ''): Promise<void> {
   const { error } = await supabase
     .from('news_suggestions')
     .update({ status: 'dismissed', dismissed_at: new Date().toISOString(), dismissed_reason: reason })
@@ -19,7 +19,7 @@ export async function dismissSuggestion(id, reason = '') {
   if (error) throw error;
 }
 
-export async function markSuggestionApplied(id, projectId) {
+export async function markSuggestionApplied(id: string, projectId: string): Promise<void> {
   const { error } = await supabase
     .from('news_suggestions')
     .update({ status: 'applied', applied_to_project_id: projectId, applied_at: new Date().toISOString() })

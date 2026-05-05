@@ -1,6 +1,57 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from './supabase';
-import { DEFAULT_AGENTS } from './agents_manager';
+import { DEFAULT_AGENTS, AgentPersona, AgentsMap } from './agents_manager';
+
+// ── Domain types ──────────────────────────────────────────────────────────────
+
+export interface Project {
+  name?: string;
+  client?: string;
+  location?: string;
+  duration?: string;
+  budget?: string;
+  size?: string;
+  building_usage?: string;
+  remarks?: string;
+  summary?: string;
+  [key: string]: unknown;
+}
+
+export interface Session {
+  theme_type?: string;
+  [key: string]: unknown;
+}
+
+export interface Message {
+  agent_role: string;
+  content: string;
+  round_number?: number;
+  [key: string]: unknown;
+}
+
+export interface SetupContext {
+  user_context?: string;
+  constraints?: string;
+  goal?: string;
+  focus_points?: string;
+  prfaq?: string;
+  briefing?: {
+    executive_brief?: string;
+    factual_baseline?: string[];
+    open_questions?: string[];
+    evidence_from_cases?: string[];
+    decision_criteria?: string[];
+  };
+  persona_files?: Record<string, string>;
+  [key: string]: unknown;
+}
+
+export interface ReferenceCase {
+  title: string;
+  summary: string;
+  outcome: string;
+  [key: string]: unknown;
+}
 
 const GEN_AI_KEY = import.meta.env.VITE_GEMINI_API_KEY || "placeholder";
 const genAI = new GoogleGenerativeAI(GEN_AI_KEY);
@@ -14,17 +65,18 @@ const CONFIDENCE_INSTRUCTION = "\n【確信度の付記】回答の最終行に�
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
-async function embedQuery(text) {
+async function embedQuery(text: string): Promise<number[] | null> {
   if (!text) return null;
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
     const res = await model.embedContent({
-      content: { parts: [{ text }] },
+      content: { role: 'user', parts: [{ text }] },
       outputDimensionality: 768,
-    });
+    } as Parameters<typeof model.embedContent>[0]);
     return res.embedding?.values || null;
   } catch (err) {
-    console.warn('[Gemini] embedQuery failed, falling back to keyword:', err?.message || err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[Gemini] embedQuery failed, falling back to keyword:', msg);
     return null;
   }
 }
@@ -34,7 +86,7 @@ async function embedQuery(text) {
 export const embedText = embedQuery;
 
 // Look up similar completed sessions by project brief.
-export const fetchSimilarDecisions = async ({ project, excludeSessionId = null, k = 3 }) => {
+export const fetchSimilarDecisions = async ({ project, excludeSessionId = null, k = 3 }: { project: Project; excludeSessionId?: string | null; k?: number }) => {
   try {
     const queryText = [project?.name, project?.summary, project?.building_usage]
       .filter(Boolean).join('\n');
@@ -52,41 +104,41 @@ export const fetchSimilarDecisions = async ({ project, excludeSessionId = null, 
   }
 };
 
-async function fetchRAGContext(project) {
+async function fetchRAGContext(project: Project): Promise<{ cases: ReferenceCase[]; ragContext: string }> {
   try {
     // 1) Vector similarity search via pgvector RPC (preferred)
     const queryText = [project.name, project.summary, project.building_usage, project.remarks]
       .filter(Boolean).join('\n');
     const queryVec = await embedQuery(queryText);
 
-    let cases = null;
+    let cases: ReferenceCase[] | null = null;
     if (queryVec) {
       const { data, error } = await supabase.rpc('match_reference_cases', {
         query_embedding: queryVec,
         match_count: 3,
       });
-      if (!error && data && data.length > 0) cases = data;
+      if (!error && data && data.length > 0) cases = data as ReferenceCase[];
     }
 
     // 2) Keyword fallback if vector path produced nothing
     if (!cases) {
-      const keywords = (project.summary || '').split(/[、\s。]/).filter(w => w.length > 1);
+      const keywords = (project.summary as string || '').split(/[、\s。]/).filter((w: string) => w.length > 1);
       const { data: kw } = await supabase
         .from('reference_cases')
         .select('*')
         .or(`summary.ilike.%${keywords[0] || ''}%,title.ilike.%${keywords[0] || ''}%`)
         .limit(3);
-      cases = kw;
+      cases = kw as ReferenceCase[] | null;
     }
 
     // 3) Last-resort generic sample so prompts still have something
     if (!cases || cases.length === 0) {
-      const { data: any } = await supabase.from('reference_cases').select('*').limit(3);
-      cases = any || [];
+      const { data: fallback } = await supabase.from('reference_cases').select('*').limit(3);
+      cases = (fallback as ReferenceCase[]) || [];
     }
 
     const ragContext = cases.length > 0
-      ? cases.map(c => `【参考事例: ${c.title}】\n概要: ${c.summary}\n結果: ${c.outcome}`).join('\n\n')
+      ? cases.map((c: ReferenceCase) => `【参考事例: ${c.title}】\n概要: ${c.summary}\n結果: ${c.outcome}`).join('\n\n')
       : '特になし';
 
     return { cases, ragContext };
@@ -95,7 +147,18 @@ async function fetchRAGContext(project) {
   }
 }
 
-function buildAgentPrompt(agentKey, session, project, roundNumber, previousMessages, setupContext, roles, cases, ragContext, roundType = null) {
+function buildAgentPrompt(
+  agentKey: string,
+  session: Session,
+  project: Project,
+  roundNumber: number,
+  previousMessages: Message[],
+  setupContext: SetupContext,
+  roles: AgentsMap,
+  cases: ReferenceCase[],
+  ragContext: string,
+  roundType: string | null = null
+): { prompt: string; systemInstruction: string } {
   const role = roles[agentKey];
 
   const projectDetails = `
@@ -240,7 +303,7 @@ ${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
   return { prompt, systemInstruction };
 }
 
-function legacyRoundType(round) {
+function legacyRoundType(round: number): string {
   // Preserve old hardcoded R1-R5 mapping for any caller that hasn't migrated.
   if (round === 1) return 'initial';
   if (round === 2) return 'feedback';
@@ -254,13 +317,13 @@ function legacyRoundType(round) {
 // the response. Strict end-of-string anchor — a tag in the middle is ignored
 // to prevent false positives from quoted material.
 // Returns { confidence: 'high'|'medium'|'low'|null, cleaned: string }.
-export function extractConfidence(content) {
+export function extractConfidence(content: string | null | undefined): { confidence: string | null; cleaned: string | null | undefined } {
   if (!content) return { confidence: null, cleaned: content };
   const re   = /\[?\s*確信度\s*[:：]\s*(高|中|低)\s*\]?\s*$/;
   const enRe = /\[?\s*confidence\s*[:：]\s*(high|medium|low)\s*\]?\s*$/i;
   const m = content.match(re);
   if (m) {
-    const map = { '高': 'high', '中': 'medium', '低': 'low' };
+    const map: Record<string, string> = { '高': 'high', '中': 'medium', '低': 'low' };
     return { confidence: map[m[1]], cleaned: content.replace(re, '').trimEnd() };
   }
   const m2 = content.match(enRe);
@@ -272,7 +335,7 @@ export function extractConfidence(content) {
 
 // ── Non-streaming (fallback / REST) ──────────────────────────────────────────
 
-async function callGemini(prompt, systemInstruction, retryCount = 0) {
+async function callGemini(prompt: string, systemInstruction: string, retryCount = 0): Promise<string> {
   const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
@@ -284,9 +347,9 @@ async function callGemini(prompt, systemInstruction, retryCount = 0) {
       })
     });
 
-    const data = await response.json();
+    const data = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[]; error?: { message?: string } };
     if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-      return data.candidates[0].content.parts[0].text;
+      return data.candidates[0].content.parts[0].text!;
     }
 
     if ((response.status === 429 || response.status === 503) && retryCount < 2) {
@@ -295,21 +358,27 @@ async function callGemini(prompt, systemInstruction, retryCount = 0) {
     }
     throw new Error(data.error?.message || `HTTP ${response.status}`);
   } catch (error) {
-    if (retryCount < 2 && error.message?.includes("quota")) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    if (retryCount < 2 && err.message?.includes("quota")) {
       await new Promise(r => setTimeout(r, 5000));
       return callGemini(prompt, systemInstruction, retryCount + 1);
     }
-    console.error("Gemini API Error:", error);
-    return `【エラー】AIとの通信に失敗しました。理由: ${error.message}`;
+    console.error("Gemini API Error:", err);
+    return `【エラー】AIとの通信に失敗しました。理由: ${err.message}`;
   }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export const generateAgentResponse = async (
-  agentKey, session, project, roundNumber,
-  previousMessages = [], setupContext = {}, customAgents = null,
-  roundType = null
+  agentKey: string,
+  session: Session,
+  project: Project,
+  roundNumber: number,
+  previousMessages: Message[] = [],
+  setupContext: SetupContext = {},
+  customAgents: AgentsMap | null = null,
+  roundType: string | null = null
 ) => {
   const roles = customAgents || AGENT_ROLES;
   if (!roles[agentKey]) return null;
@@ -329,7 +398,7 @@ export const generateAgentResponse = async (
 // Round 1 starts. Mirrors the AWS AI-DLC "Researcher writes brief → Human
 // approves" cadence.
 
-export const generateBriefing = async ({ project, setupContext, locale = 'ja' }) => {
+export const generateBriefing = async ({ project, setupContext, locale = 'ja' }: { project: Project; setupContext?: SetupContext; locale?: string }) => {
   if (!project?.name) return null;
   const { ragContext } = await fetchRAGContext(project);
 
@@ -376,7 +445,7 @@ ${ragContext}
       decision_criteria: Array.isArray(parsed.decision_criteria) ? parsed.decision_criteria : [],
     };
   } catch (err) {
-    console.warn('[Gemini] generateBriefing failed:', err?.message || err);
+    console.warn('[Gemini] generateBriefing failed:', err instanceof Error ? err.message : err);
     return null;
   }
 };
@@ -387,7 +456,7 @@ ${ragContext}
 // a "今週の業界ニュース" discussion in 30 seconds without manually filling
 // the project form.
 
-export const suggestTopicFromNews = async ({ newsText, locale = 'ja' }) => {
+export const suggestTopicFromNews = async ({ newsText, locale = 'ja' }: { newsText: string; locale?: string }) => {
   if (!newsText || newsText.length < 30) return null;
   const langInstruction = locale === 'en'
     ? 'Reply in English.' : 'すべて日本語で。';
@@ -418,7 +487,7 @@ ${newsText.slice(0, 4000)}
       project_name: parsed.project_name || '',
       project_summary: parsed.project_summary || '',
       project_type: parsed.project_type || 'Other',
-      strategic_importance: ['high', 'medium', 'low'].includes(parsed.strategic_importance) ? parsed.strategic_importance : 'medium',
+      strategic_importance: ['high', 'medium', 'low'].includes(parsed.strategic_importance as string) ? parsed.strategic_importance as string : 'medium',
       recommended_theme: parsed.recommended_theme || '',
       focus_points: parsed.focus_points || '',
       user_context: parsed.user_context || '',
@@ -426,7 +495,7 @@ ${newsText.slice(0, 4000)}
       goal: parsed.goal || '',
     };
   } catch (err) {
-    console.warn('[Gemini] suggestTopicFromNews failed:', err?.message || err);
+    console.warn('[Gemini] suggestTopicFromNews failed:', err instanceof Error ? err.message : err);
     return null;
   }
 };
@@ -435,7 +504,7 @@ ${newsText.slice(0, 4000)}
 // Quick TLDR of the discussion so far. Used by the right-side panel during
 // an active session. Cheap prompt — can be called after each round.
 
-export const summarizeProgress = async ({ messages, locale = 'ja' }) => {
+export const summarizeProgress = async ({ messages, locale = 'ja' }: { messages: Message[]; locale?: string }) => {
   if (!messages || messages.length === 0) return null;
   const transcript = messages
     .map(m => `[R${m.round_number}] ${m.agent_role}: ${(m.content || '').slice(0, 600)}`)
@@ -466,7 +535,7 @@ ${langInstruction}`;
       open_tensions: parsed.open_tensions || '',
     };
   } catch (err) {
-    console.warn('[Gemini] summarizeProgress failed:', err?.message || err);
+    console.warn('[Gemini] summarizeProgress failed:', err instanceof Error ? err.message : err);
     return null;
   }
 };
@@ -476,24 +545,24 @@ ${langInstruction}`;
 // can edit before pressing "Start". Returns null on any failure so the UI can
 // silently fall back to manual setup.
 
-export const suggestMeetingDesign = async ({ project, agents, locale = 'ja' }) => {
+export const suggestMeetingDesign = async ({ project, agents, locale = 'ja' }: { project: Project; agents: AgentsMap; locale?: string }) => {
   if (!project?.name) return null;
 
   // Group active agents by tier so the prompt presents an org chart, not a flat list.
   // Falls back to flat presentation if no tier metadata is set (Phase 2 era).
-  const activeAgents = Object.values(agents || {}).filter(a => a?.is_active);
-  const tierGroups = { 1: [], 2: [], 3: [], 4: [], external: [] };
+  const activeAgents = Object.values(agents || {}).filter((a): a is AgentPersona => !!a?.is_active);
+  const tierGroups: { 1: AgentPersona[]; 2: AgentPersona[]; 3: AgentPersona[]; 4: AgentPersona[]; external: AgentPersona[] } = { 1: [], 2: [], 3: [], 4: [], external: [] };
   let hasTier = false;
   for (const a of activeAgents) {
     if (a.agent_type === 'external') { tierGroups.external.push(a); }
     else if (a.tier && [1, 2, 3, 4].includes(Number(a.tier))) {
-      tierGroups[Number(a.tier)].push(a);
+      tierGroups[Number(a.tier) as 1 | 2 | 3 | 4].push(a);
       hasTier = true;
     } else {
       tierGroups[4].push(a); // legacy agents without tier default to Tier 4
     }
   }
-  const fmtList = (arr) => arr.map(a => `${a.id} (${a.name})`).join(', ') || '—';
+  const fmtList = (arr: AgentPersona[]) => arr.map((a: AgentPersona) => `${a.id} (${a.name})`).join(', ') || '—';
   const orgChart = hasTier ? `
 【利用可能なエージェント組織 (Tier 別)】
 - Tier 1 経営層: ${fmtList(tierGroups[1])}
@@ -551,11 +620,11 @@ ${orgChart}
     // Validate recommended_participants against actual agent IDs to avoid hallucinated names.
     const validIds = new Set(activeAgents.map(a => a.id));
     const validParticipants = Array.isArray(parsed.recommended_participants)
-      ? parsed.recommended_participants.filter(id => validIds.has(id))
+      ? (parsed.recommended_participants as string[]).filter((id: string) => validIds.has(id))
       : [];
     return {
       recommended_theme: parsed.recommended_theme || '',
-      recommended_rounds: [3, 5, 7].includes(parsed.recommended_rounds) ? parsed.recommended_rounds : 5,
+      recommended_rounds: [3, 5, 7].includes(parsed.recommended_rounds as number) ? parsed.recommended_rounds as number : 5,
       focus_points: parsed.focus_points || '',
       recommended_participants: validParticipants,
       participants_rationale: parsed.participants_rationale || '',
@@ -564,7 +633,7 @@ ${orgChart}
       estimated_minutes: typeof parsed.estimated_minutes === 'number' ? parsed.estimated_minutes : null,
     };
   } catch (err) {
-    console.warn('[Gemini] suggestMeetingDesign failed:', err?.message || err);
+    console.warn('[Gemini] suggestMeetingDesign failed:', err instanceof Error ? err.message : err);
     return null;
   }
 };
@@ -573,7 +642,7 @@ ${orgChart}
 // Reads the entire transcript and returns a structured report for the PDF.
 // Returns null on failure so the caller can fall back to a transcript-only PDF.
 
-function extractJsonObject(text) {
+function extractJsonObject(text: string): Record<string, unknown> | null {
   if (!text) return null;
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = fenced ? fenced[1] : text;
@@ -589,7 +658,7 @@ function extractJsonObject(text) {
 
 export const synthesizeDecisionMemo = async ({
   project, session, messages, setupContext, locale = 'ja'
-}) => {
+}: { project: Project; session: Session; messages: Message[]; setupContext?: SetupContext; locale?: string }) => {
   if (!messages || messages.length === 0) return null;
 
   const transcript = messages
@@ -661,11 +730,13 @@ ${transcript}
       agreements: Array.isArray(parsed.agreements) ? parsed.agreements : [],
       disagreements: Array.isArray(parsed.disagreements) ? parsed.disagreements : [],
       final_decision: {
-        headline: parsed.final_decision?.headline || '',
-        rationale: Array.isArray(parsed.final_decision?.rationale) ? parsed.final_decision.rationale : [],
+        headline: (parsed.final_decision as { headline?: string; rationale?: string[] } | undefined)?.headline || '',
+        rationale: Array.isArray((parsed.final_decision as { rationale?: string[] } | undefined)?.rationale)
+          ? (parsed.final_decision as { rationale: string[] }).rationale
+          : [],
       },
       action_items: Array.isArray(parsed.action_items)
-        ? parsed.action_items.map(a => ({
+        ? (parsed.action_items as { owner?: string; task?: string; due?: string }[]).map(a => ({
             owner: a.owner || '',
             task: a.task || '',
             due: a.due || '',
@@ -673,7 +744,7 @@ ${transcript}
         : [],
     };
   } catch (err) {
-    console.warn('[Gemini] synthesizeDecisionMemo failed:', err?.message || err);
+    console.warn('[Gemini] synthesizeDecisionMemo failed:', err instanceof Error ? err.message : err);
     return null;
   }
 };
@@ -684,9 +755,16 @@ ${transcript}
  * Falls back to non-streaming if the SDK stream fails.
  */
 export const generateAgentResponseStream = async (
-  agentKey, session, project, roundNumber,
-  previousMessages = [], setupContext = {}, customAgents = null,
-  onChunk, roundType = null, grounding = false
+  agentKey: string,
+  session: Session,
+  project: Project,
+  roundNumber: number,
+  previousMessages: Message[] = [],
+  setupContext: SetupContext = {},
+  customAgents: AgentsMap | null = null,
+  onChunk: ((text: string) => void) | null = null,
+  roundType: string | null = null,
+  grounding = false
 ) => {
   const roles = customAgents || AGENT_ROLES;
   if (!roles[agentKey]) return null;
@@ -701,9 +779,10 @@ export const generateAgentResponseStream = async (
   const useGrounding = grounding && (roundType === 'initial' || roundType === 'final_views');
 
   try {
-    const modelOptions = { model: MODEL_NAME, systemInstruction };
+    const modelOptions: Parameters<typeof genAI.getGenerativeModel>[0] = { model: MODEL_NAME, systemInstruction };
     if (useGrounding) {
-      modelOptions.tools = [{ googleSearch: {} }];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      modelOptions.tools = [{ googleSearch: {} } as any];
     }
     const model = genAI.getGenerativeModel(modelOptions);
 
@@ -719,7 +798,8 @@ export const generateAgentResponseStream = async (
     return { role: agentKey, content: fullText };
   } catch (streamError) {
     // Graceful fallback to non-streaming REST call
-    console.warn(`[Gemini] Streaming failed (${streamError.message}), falling back to REST.`);
+    const streamErrMsg = streamError instanceof Error ? streamError.message : String(streamError);
+    console.warn(`[Gemini] Streaming failed (${streamErrMsg}), falling back to REST.`);
     const content = await callGemini(prompt, systemInstruction);
     if (onChunk) onChunk(content);
     return { role: agentKey, content };

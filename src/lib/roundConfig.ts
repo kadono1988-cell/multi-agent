@@ -2,9 +2,26 @@
 // agents speak. Lets the slider drive any total length (3–7 typical) plus
 // an open-ended tail of "follow_up" rounds after the CEO final decision.
 
-export function getRoundConfig(round, maxRounds, customAgents) {
-  const allActive = Object.keys(customAgents || {})
-    .filter(k => customAgents[k]?.is_active);
+export type RoundType = 'initial' | 'feedback' | 'ceo_check' | 'final_views' | 'ceo_final' | 'follow_up';
+
+export interface RoundConfig {
+  type: RoundType;
+  agents: string[];
+}
+
+interface AgentRecord {
+  is_active?: boolean;
+  [key: string]: unknown;
+}
+
+export function getRoundConfig(
+  round: number,
+  maxRounds: number,
+  customAgents: Record<string, AgentRecord> | null | undefined
+): RoundConfig {
+  const agents = customAgents || {};
+  const allActive = Object.keys(agents)
+    .filter(k => agents[k]?.is_active);
   const nonCEO = allActive.filter(k => k !== 'CEO');
   const ceo    = allActive.includes('CEO') ? ['CEO'] : [];
 

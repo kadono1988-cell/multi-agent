@@ -1,6 +1,19 @@
 import { supabase } from './supabase';
 
-export const DEFAULT_AGENTS = {
+export interface AgentPersona {
+  id: string;
+  name: string;
+  description: string;
+  style?: string;
+  is_active: boolean;
+  tier?: number | string;
+  agent_type?: string;
+  [key: string]: unknown;
+}
+
+export type AgentsMap = Record<string, AgentPersona>;
+
+export const DEFAULT_AGENTS: AgentsMap = {
   PM: {
     id: 'PM',
     name: "現場プロジェクトマネージャー (PM)",
@@ -60,22 +73,22 @@ export const DEFAULT_AGENTS = {
 // they're editable without a code change. Hard-coded DEFAULT_AGENTS stays
 // as last-resort fallback only (e.g. Vercel preview where /agents/ might
 // not be accessible).
-async function loadAgentsFromMarkdown() {
+async function loadAgentsFromMarkdown(): Promise<AgentsMap | null> {
   try {
     const idxRes = await fetch('/agents/index.json', { cache: 'no-cache' });
     if (!idxRes.ok) return null;
-    const idx = await idxRes.json();
+    const idx = await idxRes.json() as unknown;
     // Support both old flat array format and new structured format
     // (with internal/external/all keys for tier-based organization)
-    const ids = Array.isArray(idx) ? idx : (idx.all || []);
+    const ids: string[] = Array.isArray(idx) ? idx : ((idx as Record<string, string[]>).all || []);
     if (ids.length === 0) return null;
-    const out = {};
+    const out: AgentsMap = {};
     for (const id of ids) {
       const r = await fetch(`/agents/${id}.md`, { cache: 'no-cache' });
       if (!r.ok) continue;
       const text = await r.text();
       const parsed = parseMarkdownPersona(text);
-      if (parsed?.id) out[parsed.id] = parsed;
+      if (parsed?.id) out[parsed.id as string] = parsed as unknown as AgentPersona;
     }
     return Object.keys(out).length > 0 ? out : null;
   } catch {
@@ -83,28 +96,28 @@ async function loadAgentsFromMarkdown() {
   }
 }
 
-function parseMarkdownPersona(text) {
+function parseMarkdownPersona(text: string): (Record<string, unknown> & { id?: string }) | null {
   const m = text.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (!m) return null;
-  const meta = {};
+  const meta: Record<string, unknown> = {};
   for (const line of m[1].split('\n')) {
     const kv = line.match(/^([a-zA-Z_]+):\s*(.*)$/);
     if (!kv) continue;
-    let v = kv[2].trim();
-    if (v === 'true') v = true;
-    else if (v === 'false') v = false;
-    meta[kv[1]] = v;
+    const raw = kv[2].trim();
+    if (raw === 'true') meta[kv[1]] = true;
+    else if (raw === 'false') meta[kv[1]] = false;
+    else meta[kv[1]] = raw;
   }
-  meta.description = m[2].trim();
+  meta['description'] = m[2].trim();
   return meta;
 }
 
-export const loadAgents = async () => {
+export const loadAgents = async (): Promise<AgentsMap> => {
   // 1) Supabase customizations win if present (user edited via UI).
   try {
     const { data, error } = await supabase.from('expert_agents').select('*').order('created_at');
     if (!error && data && data.length > 0) {
-      return data.reduce((acc, curr) => {
+      return data.reduce<AgentsMap>((acc, curr) => {
         acc[curr.agent_id] = { ...curr, id: curr.agent_id };
         return acc;
       }, {});
@@ -128,7 +141,7 @@ export const loadAgents = async () => {
   return DEFAULT_AGENTS;
 };
 
-export const saveAgentToStorage = async (agent) => {
+export const saveAgentToStorage = async (agent: AgentPersona): Promise<AgentsMap> => {
   // Sync to localStorage
   const current = await loadAgents();
   current[agent.id] = agent;
@@ -149,7 +162,7 @@ export const saveAgentToStorage = async (agent) => {
   return current;
 };
 
-export const deleteAgentFromStorage = async (agentId) => {
+export const deleteAgentFromStorage = async (agentId: string): Promise<AgentsMap> => {
   const current = await loadAgents();
   delete current[agentId];
   localStorage.setItem('expert_agents', JSON.stringify(current));
