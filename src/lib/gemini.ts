@@ -56,7 +56,7 @@ export interface ReferenceCase {
 const GEN_AI_KEY = import.meta.env.VITE_GEMINI_API_KEY || "placeholder";
 const genAI = new GoogleGenerativeAI(GEN_AI_KEY);
 
-const MODEL_NAME = "gemini-2.5-flash-lite";
+const MODEL_NAME = "gemini-2.5-flash";
 
 export const AGENT_ROLES = DEFAULT_AGENTS;
 
@@ -291,11 +291,11 @@ ${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
 
   } else if (type === 'ceo_check') {
     const prevRoundMessages = previousMessages.map(m => `${m.agent_role}: ${m.content}`).join('\n\n');
-    systemInstruction = `あなたは建設会社の${role.name}です。経営層として不足情報の特定に集中してください。`;
+    systemInstruction = `あなたは鹿島建設株式会社の${role.name}です。経営層として不足情報の特定に集中してください。`;
     prompt = `専門家たちの議論を読み、意思決定のために不足している情報を最大3つ特定してください。
 これまでの議論：
 ${prevRoundMessages}
-
+${kajimaBlock}
 出力内容：
 1. 議論のサマリー
 2. 不足している具体的情報 (Top 3)
@@ -310,24 +310,22 @@ ${userInputs || '（情報提供なし）'}
 
 【これまでの議論】
 ${prevRoundMessages}
-
-上記を踏まえ、専門家として最終的な見解を述べてください。
+${kajimaBlock}
+上記を踏まえ、鹿島建設の${role.name}として最終的な見解を述べてください。鹿島の公式資料を引用する場合は出典を明記してください。
 ${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
 
   } else if (type === 'ceo_final') {
     const allDiscussion = previousMessages.map(m => `${m.agent_role}: ${m.content}`).join('\n\n');
     prompt = `【全ラウンドの議論】
 ${allDiscussion}
-
-上記を総括し、CEOとして最終的な決定を下してください。
+${kajimaBlock}
+上記を総括し、鹿島建設のCEOとして最終的な決定を下してください。
 1. 最終決定
-2. 判断の根拠
+2. 判断の根拠（鹿島の経営方針・数値目標との整合を含む）
 3. 実行に向けた具体的指示
 ${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
 
   } else if (type === 'follow_up') {
-    // After the final CEO decision, the user asks "what if X?". Every active
-    // agent (incl. CEO) responds once with the new condition factored in.
     const userQuestion = [...previousMessages].reverse().find(m => m.agent_role === 'USER')?.content || '';
     const allDiscussion = previousMessages.filter(m => m.agent_role !== 'USER').map(m => `${m.agent_role}: ${m.content}`).join('\n\n');
     prompt = `【追加の問いかけ (ユーザーから)】
@@ -335,8 +333,8 @@ ${userQuestion}
 
 【これまでの全議論】
 ${allDiscussion}
-
-この追加条件を踏まえて、当初の決定をどう修正・補強すべきか、あなたの専門領域から一言で述べてください。元の結論を変える必要があれば明記してください。
+${kajimaBlock}
+この追加条件を踏まえて、当初の決定をどう修正・補強すべきか、あなたの専門領域から述べてください。元の結論を変える必要があれば明記してください。
 ${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
   }
 

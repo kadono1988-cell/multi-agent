@@ -1,7 +1,20 @@
 # 🏗️ Roadmap & Future Vision
 
-> 最終更新: 2026-03-30 (v0.8)
+> 最終更新: 2026-05-05 (v0.8)
 > 完了済み項目はすべて実装されコードに反映済みです。
+
+---
+
+## 📍 次回再開時に読む
+
+**現在の状態**: Bundle 12 完了。news cron scaffold 実装済み (api/news-cron.mjs 5 RSS feeds / Supabase upsert / NewsSuggestionsPanel UI / i18n)。TypeScript Phase A+B 完了 (src/lib 8ファイル .ts 化・型付与)。本番稼働中。
+**次の一手**: news cron 有効化 → GitHub Secrets に `CRON_SECRET` 追加 + `.github/workflows/news-cron.yml` の `schedule:` コメント解除。TypeScript Phase C-D は `docs/typescript_migration_plan.md` 参照。
+**注意点**: `multi_agent.news_suggestions` テーブルは Supabase West に作成・PostgREST 公開済み。cron はデフォルト disabled（schedule: はコメントアウト）。
+
+## 📝 変更履歴
+
+- **2026-05-05**: デザインシステム適用 — DESIGN.md (Linear-inspired, role colors 維持) + src/index.css に font-size:14px / letter-spacing:-0.005em / heading compression 追加。commit c2e2b13, Vercel デプロイ済。
+- **2026-05-05**: Bundle 12 — TypeScript Phase A (tsconfig.json + checkJs:false で既存 JSX 無影響) + ニュース cron scaffold (api/news-cron.mjs 5 RSS feeds Gemini topic 生成 / news_suggestions テーブル migration 適用 / workflow_dispatch-only GitHub Actions / NewsSuggestionsPanel + App.jsx 統合 / i18n 対応)。commits: 6367a0b (TS Phase A), c4428d4 (Bundle 12)。
 
 ---
 

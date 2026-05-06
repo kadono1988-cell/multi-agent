@@ -22,15 +22,15 @@ const CUSTOM_THEMES_KEY = 'mads_custom_themes';
 // Participant presets — quick selection for common meeting types
 const PARTICIPANT_PRESETS = {
   '既定 (Classic 4)': ['PM', 'CFO', 'COO', 'CEO'],
-  '経営判断': ['CEO', 'T1_VICE_PRES', 'CFO', 'COO', 'T1_CTO', 'T2_PLANNING', 'T2_FINANCE'],
-  '現場リスク評価': ['PM', 'COO', 'T4_SAFETY', 'T4_QC', 'T4_SITE_MGR', 'T3_SAFETY_ENV', 'T3_RISK'],
+  '経営判断': ['CEO', 'CFO', 'COO', 'T2_PLANNING', 'T2_FINANCE'],
+  '現場リスク評価': ['PM', 'COO', 'T4_SAFETY', 'T4_QC', 'T3_RISK'],
   'M&A 検討': ['CEO', 'CFO', 'T3_MA', 'T3_LEGAL', 'T2_PLANNING', 'T2_FINANCE'],
-  '海外プロジェクト': ['CEO', 'CFO', 'T2_INTL_DIV', 'T3_INTL_LEGAL', 'EXT_LEGAL'],
-  '大型受注検討': ['CEO', 'CFO', 'T2_BLDG_DIV', 'T2_SALES', 'T2_PROCUREMENT', 'T3_LEGAL'],
-  'ESG/コンプラ': ['CEO', 'COO', 'T3_ESG', 'T3_COMPLIANCE', 'T3_LEGAL', 'T3_PR_IR'],
-  'DX/技術投資': ['CEO', 'T1_CTO', 'T3_DX', 'T2_PROD_TECH', 'T4_BIM', 'T2_PLANNING'],
-  '設計変更': ['PM', 'T2_DESIGN', 'T4_DESIGNER', 'T3_QA', 'T4_BIM', 'COO'],
-  '危機対応': ['CEO', 'COO', 'T3_PR_IR', 'T3_LEGAL', 'T3_RISK', 'T3_COMPLIANCE'],
+  '大型受注検討': ['CEO', 'CFO', 'T2_BLDG_DIV', 'T2_SALES', 'T2_ESTIMATION', 'T3_LEGAL'],
+  'ESG/コンプラ': ['CEO', 'COO', 'T3_ESG', 'T3_LEGAL', 'T3_RISK'],
+  'DX/技術投資': ['CEO', 'COO', 'T3_DX', 'T3_TECH_RESEARCH', 'T2_PLANNING'],
+  '設計変更': ['PM', 'T3_TECH_RESEARCH', 'T4_QC', 'T3_AFTERCARE', 'COO'],
+  'アセット・開発': ['CEO', 'CFO', 'T2_ASSET', 'T3_LEGAL', 'T3_RISK'],
+  '危機対応': ['CEO', 'COO', 'T3_LEGAL', 'T3_RISK', 'T2_PLANNING'],
 };
 
 // Tier labels for filter tabs
