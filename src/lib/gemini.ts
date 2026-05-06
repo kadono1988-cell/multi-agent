@@ -104,6 +104,41 @@ export const fetchSimilarDecisions = async ({ project, excludeSessionId = null, 
   }
 };
 
+interface KajimaChunk {
+  id: string;
+  section_title: string | null;
+  page_hint: string | null;
+  content: string;
+  source_type: string;
+  period: string | null;
+  file_name: string;
+}
+
+async function fetchKajimaContext(project: Project, themeType?: string): Promise<string> {
+  try {
+    const queryText = [project.name, project.summary, project.building_usage, themeType]
+      .filter(Boolean).join('\n');
+    const vec = await embedQuery(queryText);
+    if (!vec) return '';
+
+    const { data, error } = await supabase.rpc('match_kajima_docs', {
+      query_embedding: vec,
+      match_count: 5,
+    });
+    if (error || !data || data.length === 0) return '';
+
+    return (data as KajimaChunk[])
+      .map(c => {
+        const citation = `（出典: ${c.source_type}${c.period ? ' ' + c.period : ''}${c.page_hint ? ' ' + c.page_hint : ''}）`;
+        const header = c.section_title ? `[${c.section_title}] ` : '';
+        return `${header}${c.content} ${citation}`;
+      })
+      .join('\n\n');
+  } catch {
+    return '';
+  }
+}
+
 async function fetchRAGContext(project: Project): Promise<{ cases: ReferenceCase[]; ragContext: string }> {
   try {
     // 1) Vector similarity search via pgvector RPC (preferred)
@@ -157,7 +192,8 @@ function buildAgentPrompt(
   roles: AgentsMap,
   cases: ReferenceCase[],
   ragContext: string,
-  roundType: string | null = null
+  roundType: string | null = null,
+  kajimaContext = ''
 ): { prompt: string; systemInstruction: string } {
   const role = roles[agentKey];
 
@@ -210,8 +246,12 @@ ${briefingBlock}
     ? `\n【追加ペルソナ資料】以下の資料の文体・視点・専門知識を吸収して発言に反映してください。\n${personaDoc.slice(0, 4000)}`
     : '';
 
+  const kajimaBlock = kajimaContext
+    ? `\n【鹿島建設 公式資料コンテキスト】\n${kajimaContext}\n※上記は鹿島建設の公式文書から抽出した情報です。引用する場合は必ず「（出典: [資料名] [期間]）」の形式で明記してください。`
+    : '';
+
   let prompt = '';
-  let systemInstruction = `あなたは建設会社の${role.name}です。${role.description} スタイル：${role.style}${focusInjection}${personaInjection}`;
+  let systemInstruction = `あなたは鹿島建設株式会社の${role.name}として会議に参加するビジネスパーソンです。${role.description} 話し方は丁寧なビジネス敬語を使い、専門性と定量的な根拠に基づいて発言してください。あなたと他の参加者の違いは話し方ではなく、担当領域・重視するKPI・リスク感度です。${focusInjection}${personaInjection}`;
 
   // Map round → prompt template. Prefer explicit roundType (Bundle 2);
   // fall back to legacy round-number mapping for older callers.
@@ -225,28 +265,28 @@ ${projectDetails}
 ${sessionDetails}
 【過去の類似事例】
 ${ragContext}
-
+${kajimaBlock}
 出力内容：
 1. 現状の理解${cases?.length > 0 ? ` [事例: ${cases[0].title}] を踏まえた分析` : ''}
 2. 主要な論点
 3. 推奨するアプローチ
 4. 潜在的リスク
-※過去事例が参考になる場合は、必ず名称を挙げて引用してください。
+※過去事例・鹿島公式資料が参考になる場合は、必ず出典を明記して引用してください。
 ${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
 
   } else if (type === 'feedback') {
     const prevRoundMessages = previousMessages.map(m => `${m.agent_role}: ${m.content}`).join('\n\n');
-    systemInstruction += `。他のメンバーと矛盾点や甘い見積もりを指摘してください。会議では発言の最後に必ず他の専門家1名を名指しで質問を投げ、議論をパスしてください。`;
+    systemInstruction += ' 他のメンバーの矛盾点や甘い見積もりを指摘し、会議の最後に必ず他の専門家1名を名指しで質問を投げてください。';
     prompt = `他のメンバーの意見を聞いて、以下の議論を深めてください。
 これまでの議論：
 ${prevRoundMessages}
-
+${kajimaBlock}
 出力内容：
 1. 他のメンバーへのフィードバック (相手のロール名を明記して引用)
 2. 自身の提案の修正・強化
 3. 反論に対する再反論
-4. 【他専門家への直接質問】 他のメンバー1名を「@PM」「@CFO」など @役職 で名指しし、具体的な質問を1つだけ投げてください。例: 「@CFO ワーストケース試算で WACC を超えるのはどの工程か？」
-※「PMさんの懸念については…」のように他メンバーの意見を直接引用してください。
+4. 【他専門家への直接質問】 他のメンバー1名を「@PM」「@CFO」など @役職 で名指しし、具体的な質問を1つだけ投げてください。
+※鹿島公式資料を引用する場合は出典を明記してください。
 ${BREVITY_INSTRUCTION}${CONFIDENCE_INSTRUCTION}`;
 
   } else if (type === 'ceo_check') {
@@ -383,9 +423,12 @@ export const generateAgentResponse = async (
   const roles = customAgents || AGENT_ROLES;
   if (!roles[agentKey]) return null;
 
-  const { cases, ragContext } = await fetchRAGContext(project);
+  const [{ cases, ragContext }, kajimaContext] = await Promise.all([
+    fetchRAGContext(project),
+    fetchKajimaContext(project, session.theme_type),
+  ]);
   const { prompt, systemInstruction } = buildAgentPrompt(
-    agentKey, session, project, roundNumber, previousMessages, setupContext, roles, cases, ragContext, roundType
+    agentKey, session, project, roundNumber, previousMessages, setupContext, roles, cases, ragContext, roundType, kajimaContext
   );
 
   const content = await callGemini(prompt, systemInstruction);
@@ -769,9 +812,12 @@ export const generateAgentResponseStream = async (
   const roles = customAgents || AGENT_ROLES;
   if (!roles[agentKey]) return null;
 
-  const { cases, ragContext } = await fetchRAGContext(project);
+  const [{ cases, ragContext }, kajimaContext] = await Promise.all([
+    fetchRAGContext(project),
+    fetchKajimaContext(project, session.theme_type),
+  ]);
   const { prompt, systemInstruction } = buildAgentPrompt(
-    agentKey, session, project, roundNumber, previousMessages, setupContext, roles, cases, ragContext, roundType
+    agentKey, session, project, roundNumber, previousMessages, setupContext, roles, cases, ragContext, roundType, kajimaContext
   );
 
   // Web grounding: only enable on rounds where fresh facts move the needle

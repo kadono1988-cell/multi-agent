@@ -13,6 +13,7 @@ import {
 import { LanguageToggle } from './components/LanguageToggle'
 import { AuthBar } from './components/AuthBar'
 import { NewsSuggestionsPanel } from './components/NewsSuggestionsPanel'
+import { RagLibraryTab } from './components/RagLibraryTab'
 import { fetchPendingSuggestions, markSuggestionApplied } from './lib/news_suggestions'
 
 const CUSTOM_THEMES_KEY = 'mads_custom_themes';
@@ -1117,6 +1118,9 @@ function App() {
           <button className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => { setActiveTab('analytics'); loadAnalytics(); }}>
             <BarChart3 size={20} /><span>{t('nav.analytics')}</span>
           </button>
+          <button className={`nav-item ${activeTab === 'rag_library' ? 'active' : ''}`} onClick={() => setActiveTab('rag_library')}>
+            <BookOpen size={20} /><span>RAGライブラリ</span>
+          </button>
         </nav>
 
         <div className="sidebar-divider"></div>
@@ -1383,6 +1387,8 @@ function App() {
               <p style={{ color: 'var(--secondary)' }}>{t('analytics.loading')}</p>
             )}
           </div>
+        ) : activeTab === 'rag_library' ? (
+          <RagLibraryTab isDemo={isDemo} />
         ) : activeTab === 'knowledge' ? (
           <div className="knowledge-base">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
