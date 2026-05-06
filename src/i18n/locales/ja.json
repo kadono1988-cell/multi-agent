@@ -37,7 +37,8 @@
     "apply": "✓ プロジェクト作成",
     "dismiss": "✕ 却下",
     "source": "ソース",
-    "fetched": "取得日"
+    "fetched": "取得日",
+    "refresh": "↻ 再読み込み"
   },
   "news": {
     "button": "ニュースから議題を起こす",

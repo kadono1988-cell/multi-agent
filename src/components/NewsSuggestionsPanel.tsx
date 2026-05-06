@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dismissSuggestion } from '../lib/news_suggestions';
 
@@ -18,10 +19,12 @@ interface NewsSuggestionsPanelProps {
   onClose: () => void;
   onApply: (s: NewsSuggestion) => void;
   onDismissed: (id: string) => void;
+  onRefresh?: () => Promise<void>;
 }
 
-export function NewsSuggestionsPanel({ suggestions, onClose, onApply, onDismissed }: NewsSuggestionsPanelProps) {
+export function NewsSuggestionsPanel({ suggestions, onClose, onApply, onDismissed, onRefresh }: NewsSuggestionsPanelProps) {
   const { t } = useTranslation();
+  const [refreshing, setRefreshing] = useState(false);
 
   const handleDismiss = async (id: string) => {
     try {
@@ -29,6 +32,16 @@ export function NewsSuggestionsPanel({ suggestions, onClose, onApply, onDismisse
       onDismissed(id);
     } catch (e) {
       console.error('dismiss failed:', e);
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (!onRefresh || refreshing) return;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -51,7 +64,20 @@ export function NewsSuggestionsPanel({ suggestions, onClose, onApply, onDismisse
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <strong style={{ fontSize: '0.95rem' }}>{t('news_suggestions.panel_title') as string}</strong>
-          <button className="btn-icon" onClick={onClose}>✕</button>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {onRefresh && (
+              <button
+                className="btn-icon"
+                title={t('news_suggestions.refresh') as string}
+                onClick={handleRefresh}
+                disabled={refreshing}
+                style={{ opacity: refreshing ? 0.5 : 1 }}
+              >
+                {refreshing ? '…' : '↻'}
+              </button>
+            )}
+            <button className="btn-icon" onClick={onClose}>✕</button>
+          </div>
         </div>
 
         {suggestions.length === 0 ? (

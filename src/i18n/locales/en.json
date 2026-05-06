@@ -37,7 +37,8 @@
     "apply": "✓ Create project",
     "dismiss": "✕ Dismiss",
     "source": "Source",
-    "fetched": "Fetched"
+    "fetched": "Fetched",
+    "refresh": "↻ Refresh"
   },
   "news": {
     "button": "Spin up topic from news",

@@ -849,3 +849,94 @@ export const generateAgentResponseStream = async (
     return { role: agentKey, content };
   }
 };
+
+// ── Post-session Debriefing ───────────────────────────────────────────────────
+
+export interface AgentDebriefing {
+  name: string;
+  stance: string;
+  key_concerns: string[];
+  why: string;
+}
+
+export const generateDebriefing = async ({
+  messages,
+  participants,
+  project,
+  session,
+  agents,
+  locale = 'ja',
+}: {
+  messages: Message[];
+  participants: string[];
+  project: Project;
+  session: Session;
+  agents: AgentsMap;
+  locale?: string;
+}): Promise<Record<string, AgentDebriefing>> => {
+  const isJa = locale !== 'en';
+
+  // Build condensed transcript (first 120 chars per message to save tokens)
+  const transcript = messages
+    .map(m => `[${m.agent_role}] ${(m.content || '').slice(0, 180)}`)
+    .join('\n');
+
+  const agentList = participants
+    .map(id => `- ${id}: ${agents[id]?.name || id}`)
+    .join('\n');
+
+  const prompt = isJa ? `
+以下は「${project.name || 'プロジェクト'}」に関する建設AI会議の議事録です（テーマ: ${session.theme_type || ''}）。
+
+【参加エージェント】
+${agentList}
+
+【会議ログ（抜粋）】
+${transcript}
+
+各エージェントについて、以下のJSON形式で分析してください。
+- stance: そのエージェントが最終的にとった立場（1文、20〜40字）
+- key_concerns: そのエージェントが最も重視した論点（3つの箇条書き、各30字以内）
+- why: なぜその立場をとったか、担当領域・KPIの観点からの解説（2〜3文）
+
+出力はJSON配列だけを返してください（マークダウンコードブロック不要）:
+[{"id": "エージェントID", "stance": "...", "key_concerns": ["...","...","..."], "why": "..."}, ...]
+` : `
+Below is the meeting log of a construction AI conference about "${project.name || 'project'}" (theme: ${session.theme_type || ''}).
+
+Participants:
+${agentList}
+
+Meeting log (excerpt):
+${transcript}
+
+For each agent, analyze in JSON format:
+- stance: final position (1 sentence)
+- key_concerns: top 3 concerns (bullet points)
+- why: explanation from their domain/KPI perspective (2-3 sentences)
+
+Return only a JSON array:
+[{"id": "agentId", "stance": "...", "key_concerns": ["...","...","..."], "why": "..."}, ...]
+`;
+
+  const systemInstruction = isJa
+    ? 'あなたは組織行動分析の専門家です。会議の発言から各参加者の論理・立場・バイアスを客観的に分析します。'
+    : 'You are an expert in organizational behavior. Analyze each participant\'s logic, stance, and bias objectively.';
+
+  const raw = await callGemini(prompt, systemInstruction);
+
+  // Parse JSON (strip markdown fences if present)
+  const cleaned = raw.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
+  const parsed: Array<{ id: string; stance: string; key_concerns: string[]; why: string }> = JSON.parse(cleaned);
+
+  const result: Record<string, AgentDebriefing> = {};
+  for (const item of parsed) {
+    result[item.id] = {
+      name: agents[item.id]?.name || item.id,
+      stance: item.stance,
+      key_concerns: item.key_concerns || [],
+      why: item.why,
+    };
+  }
+  return result;
+};

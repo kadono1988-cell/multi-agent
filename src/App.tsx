@@ -15,6 +15,9 @@ import { LanguageToggle } from './components/LanguageToggle'
 import { AuthBar } from './components/AuthBar'
 import { NewsSuggestionsPanel } from './components/NewsSuggestionsPanel'
 import { RagLibraryTab } from './components/RagLibraryTab'
+import { AgentProfileModal } from './components/AgentProfileModal'
+import { DebriefingPanel } from './components/DebriefingPanel'
+import { DiscussionHeatmap } from './components/DiscussionHeatmap'
 import { fetchPendingSuggestions, markSuggestionApplied } from './lib/news_suggestions'
 
 const CUSTOM_THEMES_KEY = 'mads_custom_themes';
@@ -148,6 +151,9 @@ function App() {
   const [editingAgent, setEditingAgent]     = useState(null)
   const [editingCase, setEditingCase]       = useState(null)
   const [caseForm, setCaseForm]             = useState({ title: '', summary: '', outcome: '', project_type: '' })
+
+  // ── Agent profile modal ──────────────────────────────────────────────────────
+  const [profileAgent, setProfileAgent] = useState(null) // { id, name }
 
   // ── Session history ─────────────────────────────────────────────────────────
   const [sessionHistory, setSessionHistory] = useState([])
@@ -1227,6 +1233,7 @@ function App() {
                       {agent.id.substring(0, 2)}
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
+                      <button className="btn-icon" title="プロフィール" onClick={() => setProfileAgent({ id: agent.id, name: agent.name })}>ℹ</button>
                       <button className="btn-icon" onClick={() => setEditingAgent({...agent})}>{t('common.edit')}</button>
                       <button className="btn-icon" style={{ color: 'red' }} onClick={() => { if(confirm(t('common.delete_confirm'))) deleteAgentFromStorage(agent.id).then(loadExpertAgents); }}>
                         <Trash2 size={15}/>
@@ -1285,6 +1292,23 @@ function App() {
             <p style={{ color: 'var(--secondary)', fontSize: '0.88rem', marginBottom: '1.5rem' }}>
               {t('analytics.intro')}
             </p>
+
+            {/* Per-session heatmap */}
+            {messages.length > 0 && participants.length > 0 && (
+              <div className="card" style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ fontSize: '0.85rem', marginBottom: '0.4rem' }}>議論ヒートマップ（現セッション）</h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--secondary)', marginBottom: '0.75rem' }}>
+                  ラウンド×エージェントの発言傾向。発言キーワードから賛成・懸念・中立を推定。
+                </p>
+                <DiscussionHeatmap
+                  messages={messages}
+                  participants={participants}
+                  agents={customAgents}
+                  maxRounds={maxRounds}
+                />
+              </div>
+            )}
+
             {analyticsData ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
                 <div className="card">
@@ -1658,7 +1682,13 @@ function App() {
                                   e.target.checked ? [...prev, a.id] : prev.filter(x => x !== a.id)
                                 )} />
                               <span style={{ fontSize: '0.7rem', padding: '1px 5px', borderRadius: '3px', background: isExt ? 'var(--accent)' : 'var(--secondary)', color: 'white', minWidth: '28px', textAlign: 'center' }}>{tierBadge}</span>
-                              <span style={{ color: isExt ? 'var(--accent)' : 'var(--text)' }}>{a.name}</span>
+                              <span style={{ color: isExt ? 'var(--accent)' : 'var(--text)', flex: 1 }}>{a.name}</span>
+                              <button type="button"
+                                onClick={e => { e.preventDefault(); setProfileAgent({ id: a.id, name: a.name }); }}
+                                style={{ fontSize: '0.65rem', padding: '1px 5px', border: '1px solid var(--border)', borderRadius: 3, background: 'transparent', color: 'var(--secondary)', cursor: 'pointer', flexShrink: 0 }}
+                                title="プロフィール">
+                                ℹ
+                              </button>
                             </label>
                           );
                         })}
@@ -2056,6 +2086,17 @@ function App() {
           </div>
         )}
 
+        {currentRound >= maxRounds && session && !session.readonly && messages.length > 0 && (
+          <DebriefingPanel
+            messages={messages}
+            participants={participants}
+            project={activeProject || {}}
+            session={session}
+            agents={customAgents}
+            locale={i18n.resolvedLanguage === 'en' ? 'en' : 'ja'}
+          />
+        )}
+
         {currentRound >= maxRounds && session && !session.readonly && (
           <div className="card" style={{ marginBottom: '1.5rem' }}>
             <h3 style={{ marginBottom: '0.6rem' }}>{t('right_panel.followup_heading')}</h3>
@@ -2151,6 +2192,10 @@ function App() {
           suggestions={newsSuggestions}
           onClose={() => setSuggestionsPanelOpen(false)}
           onDismissed={(id) => setNewsSuggestions(prev => prev.filter(s => s.id !== id))}
+          onRefresh={async () => {
+            const fresh = await fetchPendingSuggestions();
+            setNewsSuggestions(fresh);
+          }}
           onApply={async (suggestion) => {
             const sug = suggestion.suggested_project || {};
             const newProject = {
@@ -2339,6 +2384,15 @@ function App() {
           </div>
         </div>
       ) : null}
+
+      {/* Agent Profile Modal — global overlay */}
+      {profileAgent && (
+        <AgentProfileModal
+          agentId={profileAgent.id}
+          agentName={profileAgent.name}
+          onClose={() => setProfileAgent(null)}
+        />
+      )}
     </div>
   )
 }
