@@ -1,10 +1,29 @@
 import { useTranslation } from 'react-i18next';
-import { dismissSuggestion } from '../lib/news_suggestions.js';
+import { dismissSuggestion } from '../lib/news_suggestions';
 
-export function NewsSuggestionsPanel({ suggestions, onClose, onApply, onDismissed }) {
+export interface NewsSuggestion {
+  id: string;
+  source_title: string;
+  source_feed: string;
+  fetched_at: string;
+  suggested_summary?: string;
+  suggested_project?: {
+    project_name?: string;
+    [key: string]: unknown;
+  };
+}
+
+interface NewsSuggestionsPanelProps {
+  suggestions: NewsSuggestion[];
+  onClose: () => void;
+  onApply: (s: NewsSuggestion) => void;
+  onDismissed: (id: string) => void;
+}
+
+export function NewsSuggestionsPanel({ suggestions, onClose, onApply, onDismissed }: NewsSuggestionsPanelProps) {
   const { t } = useTranslation();
 
-  const handleDismiss = async (id) => {
+  const handleDismiss = async (id: string) => {
     try {
       await dismissSuggestion(id);
       onDismissed(id);
@@ -23,7 +42,7 @@ export function NewsSuggestionsPanel({ suggestions, onClose, onApply, onDismisse
       }}
     >
       <div
-        onClick={e => e.stopPropagation()}
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
         style={{
           background: 'var(--card)', border: '1px solid var(--border)',
           borderRadius: 12, padding: 20, width: 380, maxHeight: '75vh',
@@ -31,13 +50,13 @@ export function NewsSuggestionsPanel({ suggestions, onClose, onApply, onDismisse
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <strong style={{ fontSize: '0.95rem' }}>{t('news_suggestions.panel_title')}</strong>
+          <strong style={{ fontSize: '0.95rem' }}>{t('news_suggestions.panel_title') as string}</strong>
           <button className="btn-icon" onClick={onClose}>✕</button>
         </div>
 
         {suggestions.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            {t('news_suggestions.panel_empty')}
+            {t('news_suggestions.panel_empty') as string}
           </p>
         ) : (
           suggestions.map(s => (
@@ -57,8 +76,8 @@ export function NewsSuggestionsPanel({ suggestions, onClose, onApply, onDismisse
                 </p>
               )}
               <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: 8 }}>
-                {t('news_suggestions.source')}: {s.source_feed} ·{' '}
-                {t('news_suggestions.fetched')}: {new Date(s.fetched_at).toLocaleDateString()}
+                {t('news_suggestions.source') as string}: {s.source_feed} ·{' '}
+                {t('news_suggestions.fetched') as string}: {new Date(s.fetched_at).toLocaleDateString()}
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button
@@ -66,14 +85,14 @@ export function NewsSuggestionsPanel({ suggestions, onClose, onApply, onDismisse
                   style={{ fontSize: '0.78rem', padding: '4px 10px' }}
                   onClick={() => onApply(s)}
                 >
-                  {t('news_suggestions.apply')}
+                  {t('news_suggestions.apply') as string}
                 </button>
                 <button
                   className="btn"
                   style={{ fontSize: '0.78rem', padding: '4px 10px' }}
                   onClick={() => handleDismiss(s.id)}
                 >
-                  {t('news_suggestions.dismiss')}
+                  {t('news_suggestions.dismiss') as string}
                 </button>
               </div>
             </div>

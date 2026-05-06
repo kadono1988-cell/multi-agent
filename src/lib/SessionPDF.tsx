@@ -34,18 +34,8 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     lineHeight: 1.6,
   },
-
-  coverTitle: {
-    fontSize: 20,
-    marginBottom: 6,
-    color: COLORS.text,
-  },
-  coverSubtitle: {
-    fontSize: 10,
-    color: COLORS.muted,
-    marginBottom: 20,
-  },
-
+  coverTitle: { fontSize: 20, marginBottom: 6, color: COLORS.text },
+  coverSubtitle: { fontSize: 10, color: COLORS.muted, marginBottom: 20 },
   metaBlock: {
     marginBottom: 18,
     padding: 12,
@@ -54,20 +44,9 @@ const styles = StyleSheet.create({
     borderLeftStyle: "solid",
     borderLeftColor: COLORS.accent,
   },
-  metaRow: {
-    flexDirection: "row",
-    marginBottom: 4,
-  },
-  metaLabel: {
-    width: 80,
-    fontSize: 9,
-    color: COLORS.muted,
-  },
-  metaValue: {
-    flex: 1,
-    fontSize: 10,
-  },
-
+  metaRow: { flexDirection: "row", marginBottom: 4 },
+  metaLabel: { width: 80, fontSize: 9, color: COLORS.muted },
+  metaValue: { flex: 1, fontSize: 10 },
   sectionTitle: {
     fontSize: 13,
     marginTop: 14,
@@ -78,74 +57,21 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     color: COLORS.accent,
   },
-  subsectionTitle: {
-    fontSize: 10,
-    marginTop: 8,
-    marginBottom: 4,
-    color: COLORS.muted,
-  },
-
-  paragraph: {
-    fontSize: 10,
-    lineHeight: 1.65,
-    marginBottom: 6,
-  },
-
-  bulletRow: {
-    flexDirection: "row",
-    marginBottom: 3,
-    paddingLeft: 4,
-  },
-  bulletDot: {
-    width: 10,
-    fontSize: 10,
-    color: COLORS.accent,
-  },
-  bulletText: {
-    flex: 1,
-    fontSize: 10,
-    lineHeight: 1.55,
-  },
-
-  // Minimal textual variants — boxed/coloured callouts caused PDFKit
-  // overflow on real 5-round content. Restore decoration incrementally
-  // once we have a clean baseline.
-  calloutBox: {
-    marginTop: 2,
-    marginBottom: 8,
-    paddingLeft: 6,
-  },
+  subsectionTitle: { fontSize: 10, marginTop: 8, marginBottom: 4, color: COLORS.muted },
+  paragraph: { fontSize: 10, lineHeight: 1.65, marginBottom: 6 },
+  bulletRow: { flexDirection: "row", marginBottom: 3, paddingLeft: 4 },
+  bulletDot: { width: 10, fontSize: 10, color: COLORS.accent },
+  bulletText: { flex: 1, fontSize: 10, lineHeight: 1.55 },
+  calloutBox: { marginTop: 2, marginBottom: 8, paddingLeft: 6 },
   calloutSummary: { color: COLORS.accent },
   calloutDecision: { color: COLORS.decision },
   calloutAgree: { color: COLORS.positive },
   calloutWarn: { color: COLORS.warn },
-  calloutLabel: {
-    fontSize: 9,
-    color: COLORS.muted,
-    marginBottom: 4,
-  },
-  calloutHeadline: {
-    fontSize: 11,
-    marginBottom: 4,
-    color: COLORS.text,
-  },
-
-  // Action item list — flex/bordered table caused layout overflow on
-  // real data, so render as plain bullets with role label inline.
-  actionItemRow: {
-    marginBottom: 4,
-    paddingLeft: 4,
-    fontSize: 10,
-    lineHeight: 1.55,
-  },
-  actionOwner: {
-    color: COLORS.accent,
-  },
-  actionDue: {
-    color: COLORS.muted,
-    fontSize: 9,
-  },
-
+  calloutLabel: { fontSize: 9, color: COLORS.muted, marginBottom: 4 },
+  calloutHeadline: { fontSize: 11, marginBottom: 4, color: COLORS.text },
+  actionItemRow: { marginBottom: 4, paddingLeft: 4, fontSize: 10, lineHeight: 1.55 },
+  actionOwner: { color: COLORS.accent },
+  actionDue: { color: COLORS.muted, fontSize: 9 },
   appendixBanner: {
     marginTop: 24,
     marginBottom: 10,
@@ -153,30 +79,16 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     textAlign: "center",
   },
-
-  setupField: {
-    marginBottom: 10,
-  },
-  setupLabel: {
-    fontSize: 9,
-    color: COLORS.muted,
-    marginBottom: 3,
-  },
-  setupValue: {
-    fontSize: 10,
-    lineHeight: 1.6,
-  },
+  setupField: { marginBottom: 10 },
+  setupLabel: { fontSize: 9, color: COLORS.muted, marginBottom: 3 },
+  setupValue: { fontSize: 10, lineHeight: 1.6 },
   prfaqValue: {
     fontSize: 9,
     lineHeight: 1.5,
     padding: 8,
     backgroundColor: COLORS.tableRowAlt,
   },
-
-  roundBlock: {
-    marginTop: 14,
-    marginBottom: 4,
-  },
+  roundBlock: { marginTop: 14, marginBottom: 4 },
   roundHeading: {
     fontSize: 13,
     marginBottom: 8,
@@ -187,10 +99,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
     color: "#ffffff",
   },
-
-  messageBlock: {
-    marginBottom: 10,
-  },
+  messageBlock: { marginBottom: 10 },
   agentLabel: {
     fontSize: 11,
     color: COLORS.agentBar,
@@ -200,13 +109,7 @@ const styles = StyleSheet.create({
     borderLeftStyle: "solid",
     borderLeftColor: COLORS.agentBar,
   },
-  messageBody: {
-    fontSize: 10,
-    lineHeight: 1.65,
-    paddingLeft: 10,
-    color: COLORS.text,
-  },
-
+  messageBody: { fontSize: 10, lineHeight: 1.65, paddingLeft: 10, color: COLORS.text },
   footerContainer: {
     position: "absolute",
     left: 48,
@@ -220,25 +123,17 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
     paddingTop: 6,
   },
-  footer: {
-    flex: 1,
-    fontSize: 8,
-    color: COLORS.muted,
-    textAlign: "center",
-  },
-  pageNumber: {
-    fontSize: 8,
-    color: COLORS.muted,
-  },
-
-  emptyHint: {
-    fontSize: 9,
-    color: COLORS.muted,
-    marginBottom: 6,
-  },
+  footer: { flex: 1, fontSize: 8, color: COLORS.muted, textAlign: "center" },
+  pageNumber: { fontSize: 8, color: COLORS.muted },
+  emptyHint: { fontSize: 9, color: COLORS.muted, marginBottom: 6 },
 });
 
-function MetaRow({ label, value }) {
+interface MetaRowProps {
+  label: string;
+  value?: string | null;
+}
+
+function MetaRow({ label, value }: MetaRowProps) {
   if (!value) return null;
   return (
     <View style={styles.metaRow}>
@@ -248,8 +143,13 @@ function MetaRow({ label, value }) {
   );
 }
 
-function BulletList({ items, emptyHint }) {
-  const valid = (items || []).filter(x => typeof x === 'string' && x.trim());
+interface BulletListProps {
+  items?: unknown[];
+  emptyHint?: string;
+}
+
+function BulletList({ items, emptyHint }: BulletListProps) {
+  const valid = (items || []).filter((x): x is string => typeof x === 'string' && x.trim() !== '');
   if (valid.length === 0) {
     return emptyHint ? <Text style={styles.emptyHint}>{emptyHint}</Text> : null;
   }
@@ -265,7 +165,13 @@ function BulletList({ items, emptyHint }) {
   );
 }
 
-function SetupField({ label, value, monospace = false }) {
+interface SetupFieldProps {
+  label: string;
+  value?: string | null;
+  monospace?: boolean;
+}
+
+function SetupField({ label, value, monospace = false }: SetupFieldProps) {
   if (!value || !value.trim()) return null;
   return (
     <View style={styles.setupField}>
@@ -275,7 +181,114 @@ function SetupField({ label, value, monospace = false }) {
   );
 }
 
-export function SessionPDF({ project, session, messages, setupContext, labels, report }) {
+interface ActionItem {
+  owner?: string;
+  task?: string;
+  due?: string;
+}
+
+interface FinalDecision {
+  headline?: string;
+  rationale?: string[];
+}
+
+interface Report {
+  executive_summary?: string;
+  conclusion?: string;
+  discussion_points?: string[];
+  agreements?: string[];
+  disagreements?: string[];
+  final_decision?: FinalDecision;
+  action_items?: ActionItem[];
+}
+
+interface SetupContext {
+  user_context?: string;
+  constraints?: string;
+  goal?: string;
+  focus_points?: string;
+  prfaq?: string;
+}
+
+interface Message {
+  round_number: number;
+  agent_role: string;
+  content: string;
+}
+
+interface Project {
+  name?: string;
+  client?: string;
+  budget?: string;
+}
+
+interface Session {
+  created_at?: string;
+  theme_type?: string;
+}
+
+interface MetaLabels {
+  project: string;
+  client: string;
+  budget: string;
+  theme: string;
+  date: string;
+}
+
+interface SetupLabels {
+  user_context: string;
+  constraints: string;
+  goal: string;
+  focus_points: string;
+  prfaq: string;
+}
+
+interface ReportLabels {
+  executive_summary: string;
+  conclusion: string;
+  discussion_points: string;
+  agreements: string;
+  disagreements: string;
+  final_decision: string;
+  action_items: string;
+  empty_points: string;
+  empty_agreements: string;
+  empty_disagreements: string;
+  empty_rationale: string;
+  empty_actions: string;
+  unavailable: string;
+}
+
+interface SectionLabels {
+  cover_summary: string;
+  structured_body: string;
+  appendix: string;
+  setup: string;
+  transcript: string;
+}
+
+interface Labels {
+  title: string;
+  subtitle: string;
+  footer: string;
+  locale?: string;
+  round_prefix: string;
+  meta: MetaLabels;
+  setup: SetupLabels;
+  report: ReportLabels;
+  sections: SectionLabels;
+}
+
+interface SessionPDFProps {
+  project: Project;
+  session: Session;
+  messages: Message[];
+  setupContext?: SetupContext | null;
+  labels: Labels;
+  report?: Report | null;
+}
+
+export function SessionPDF({ project, session, messages, setupContext, labels, report }: SessionPDFProps) {
   const createdAt = session?.created_at
     ? new Date(session.created_at).toLocaleString(labels.locale || "ja-JP")
     : "";
@@ -290,8 +303,8 @@ export function SessionPDF({ project, session, messages, setupContext, labels, r
   );
 
   const r = report || null;
-  const reportLabels = labels.report || {};
-  const sectionLabels = labels.sections || {};
+  const reportLabels = labels.report;
+  const sectionLabels = labels.sections;
 
   return (
     <Document>
@@ -309,7 +322,6 @@ export function SessionPDF({ project, session, messages, setupContext, labels, r
           <MetaRow label={labels.meta.date} value={createdAt} />
         </View>
 
-        {/* ── Cover Summary ─────────────────────────────────────── */}
         {r ? (
           <View>
             <Text style={styles.sectionTitle}>{sectionLabels.cover_summary}</Text>
@@ -335,7 +347,6 @@ export function SessionPDF({ project, session, messages, setupContext, labels, r
           </View>
         )}
 
-        {/* ── Structured Body ───────────────────────────────────── */}
         {r ? (
           <View>
             <Text style={styles.sectionTitle}>{sectionLabels.structured_body}</Text>
@@ -373,10 +384,6 @@ export function SessionPDF({ project, session, messages, setupContext, labels, r
           </View>
         ) : null}
 
-        {/* ── Appendix ─────────────────────────────────────────── */}
-        {/* Avoid `break` here: combined with the <View fixed> footer it triggers
-            a known react-pdf/PDFKit overflow ("unsupported number: -9.44e+21").
-            Use a strong visual banner with top spacing instead. */}
         <View>
           <Text style={styles.appendixBanner}>{sectionLabels.appendix}</Text>
         </View>
@@ -384,11 +391,11 @@ export function SessionPDF({ project, session, messages, setupContext, labels, r
         {hasSetup ? (
           <View>
             <Text style={styles.sectionTitle}>{labels.sections.setup}</Text>
-            <SetupField label={labels.setup.user_context} value={setupContext.user_context} />
-            <SetupField label={labels.setup.constraints} value={setupContext.constraints} />
-            <SetupField label={labels.setup.goal} value={setupContext.goal} />
-            <SetupField label={labels.setup.focus_points} value={setupContext.focus_points} />
-            <SetupField label={labels.setup.prfaq} value={setupContext.prfaq} monospace />
+            <SetupField label={labels.setup.user_context} value={setupContext!.user_context} />
+            <SetupField label={labels.setup.constraints} value={setupContext!.constraints} />
+            <SetupField label={labels.setup.goal} value={setupContext!.goal} />
+            <SetupField label={labels.setup.focus_points} value={setupContext!.focus_points} />
+            <SetupField label={labels.setup.prfaq} value={setupContext!.prfaq} monospace />
           </View>
         ) : null}
 

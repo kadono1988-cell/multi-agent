@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
-const SOURCE_COLORS = {
+interface RagDocument {
+  id: string;
+  file_name: string;
+  source_type: string;
+  period?: string;
+  is_active: boolean;
+  chunk_count?: number;
+  ingested_at?: string;
+}
+
+const SOURCE_COLORS: Record<string, { bg: string; fg: string }> = {
   '有価証券報告書':         { bg: '#dbeafe', fg: '#1e40af' },
   '統合報告書':             { bg: '#dcfce7', fg: '#166534' },
   '決算説明会資料':         { bg: '#fef9c3', fg: '#854d0e' },
@@ -9,7 +19,7 @@ const SOURCE_COLORS = {
   'コーポレートガバナンス報告書': { bg: '#fee2e2', fg: '#991b1b' },
 };
 
-function SourceBadge({ type }) {
+function SourceBadge({ type }: { type: string }) {
   const c = SOURCE_COLORS[type] || { bg: '#f1f5f9', fg: '#475569' };
   return (
     <span style={{
@@ -21,10 +31,14 @@ function SourceBadge({ type }) {
   );
 }
 
-export function RagLibraryTab({ isDemo }) {
-  const [docs, setDocs] = useState([]);
+interface RagLibraryTabProps {
+  isDemo: boolean;
+}
+
+export function RagLibraryTab({ isDemo }: RagLibraryTabProps) {
+  const [docs, setDocs] = useState<RagDocument[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchDocs = async () => {
     if (isDemo) { setDocs([]); setLoading(false); return; }
@@ -34,13 +48,13 @@ export function RagLibraryTab({ isDemo }) {
       .select('*')
       .order('ingested_at', { ascending: false });
     if (err) setError(err.message);
-    else setDocs(data || []);
+    else setDocs((data as RagDocument[]) || []);
     setLoading(false);
   };
 
   useEffect(() => { fetchDocs(); }, []);
 
-  const toggleActive = async (doc) => {
+  const toggleActive = async (doc: RagDocument) => {
     const next = !doc.is_active;
     await supabase.from('rag_documents').update({ is_active: next }).eq('id', doc.id);
     setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, is_active: next } : d));
@@ -56,7 +70,6 @@ export function RagLibraryTab({ isDemo }) {
         公式資料から生成されたナレッジチャンク。議論中、関連箇所が自動的にエージェントへ注入されます。
       </p>
 
-      {/* Summary cards */}
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
         {[
           { label: '登録ドキュメント', value: docs.length },
@@ -70,7 +83,6 @@ export function RagLibraryTab({ isDemo }) {
         ))}
       </div>
 
-      {/* Document list */}
       {loading ? (
         <p style={{ color: 'var(--secondary)' }}>読み込み中...</p>
       ) : error ? (
@@ -94,13 +106,11 @@ export function RagLibraryTab({ isDemo }) {
               display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
               opacity: doc.is_active ? 1 : 0.5,
             }}>
-              {/* Toggle */}
               <label className="switch" style={{ flexShrink: 0 }}>
                 <input type="checkbox" checked={!!doc.is_active} onChange={() => toggleActive(doc)} />
                 <span className="slider" />
               </label>
 
-              {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: 3 }}>
                   <SourceBadge type={doc.source_type} />
@@ -113,7 +123,6 @@ export function RagLibraryTab({ isDemo }) {
                 </div>
               </div>
 
-              {/* Stats */}
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{doc.chunk_count ?? 0}
                   <span style={{ fontSize: '0.72rem', fontWeight: 400, color: 'var(--secondary)', marginLeft: 3 }}>chunks</span>
@@ -127,7 +136,6 @@ export function RagLibraryTab({ isDemo }) {
         </div>
       )}
 
-      {/* Re-ingest hint */}
       {docs.length > 0 && (
         <div style={{ marginTop: '1.5rem', fontSize: '0.78rem', color: 'var(--secondary)' }}>
           年次更新:
