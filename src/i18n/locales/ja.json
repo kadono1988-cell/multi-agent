@@ -38,7 +38,15 @@
     "dismiss": "✕ 却下",
     "source": "ソース",
     "fetched": "取得日",
-    "refresh": "↻ 再読み込み"
+    "refresh": "↻ 再読み込み",
+    "search_placeholder": "🔍 タイトル・要約・ソースで絞り込み…",
+    "source_all": "全ソース",
+    "range_all": "全期間",
+    "range_1d": "24時間以内",
+    "range_3d": "3日以内",
+    "range_7d": "7日以内",
+    "count_label": "{{shown}} / {{total}} 件",
+    "no_match": "条件に合うニュースがありません"
   },
   "news": {
     "button": "ニュースから議題を起こす",
@@ -161,6 +169,8 @@
     "go_no_go_desc": "プロジェクト続行の可否を多角的に判断",
     "design_change_label": "📐 設計変更への対応",
     "design_change_desc": "設計変更の影響とリスクを分析",
+    "news_discussion_label": "📰 業界ニュース議論",
+    "news_discussion_desc": "保留中のニュース記事を議題に、業界動向への対応を多角的に議論",
     "custom_label": "💬 個別具体の相談",
     "custom_desc": "具体的な課題を自由に設定して相談",
     "select_heading": "🗣️ 議論テーマを選択",
@@ -198,7 +208,16 @@
     "prfaq_placeholder": "# ニュース記事 (完成時の想定)\n見出し: \n本文: \n\n# FAQ\nQ: 発注者にとっての最大の価値は?\nA: \nQ: 現場にとっての最大のリスクは?\nA: ",
     "prfaq_hint": "Amazonが採用する PRFAQ 手法。「完成時のニュース記事」を先に書くことで議論の焦点が絞られます。発注者・現場・投資家の視点が自然に浮かび上がります。",
     "start": "🚀 議論を開始する",
-    "start_failed": "議論の開始に失敗しました: {{error}}"
+    "start_failed": "議論の開始に失敗しました: {{error}}",
+    "pick_news_first": "📰 まずニュースを選択してください"
+  },
+  "news_discussion": {
+    "picker_title": "議題にするニュースを選択",
+    "picker_hint": "保留中のニュース提案から、本会議で討議する記事を1つ選んでください。選択するとプロジェクト概要が議題用に整形され、目的・論点に提案内容が転記されます。",
+    "selected_label": "選択中のニュース",
+    "open_source": "原文を開く",
+    "change": "変更",
+    "empty_hint": "保留中のニュース提案がありません。先にダッシュボードのニュースバッジから取り込みを実行してください。"
   },
   "session": {
     "back_history": "← 履歴一覧へ戻る",

@@ -1,18 +1,20 @@
 # 🏗️ Roadmap & Future Vision
 
-> 最終更新: 2026-05-05 (v0.8)
+> 最終更新: 2026-05-08 (Bundle 14)
 > 完了済み項目はすべて実装されコードに反映済みです。
 
 ---
 
 ## 📍 次回再開時に読む
 
-**現在の状態**: Bundle 12 完了。news cron scaffold 実装済み (api/news-cron.mjs 5 RSS feeds / Supabase upsert / NewsSuggestionsPanel UI / i18n)。TypeScript Phase A+B 完了 (src/lib 8ファイル .ts 化・型付与)。本番稼働中。
-**次の一手**: news cron 有効化 → GitHub Secrets に `CRON_SECRET` 追加 + `.github/workflows/news-cron.yml` の `schedule:` コメント解除。TypeScript Phase C-D は `docs/typescript_migration_plan.md` 参照。
-**注意点**: `multi_agent.news_suggestions` テーブルは Supabase West に作成・PostgREST 公開済み。cron はデフォルト disabled（schedule: はコメントアウト）。
+**現在の状態**: Bundle 14 完了。ニュース議論モード実装 (📰 業界ニュース議論 テーマ + NewsDiscussionPicker + gemini.ts の news_article block / ニュース議論用 systemInstruction)・NewsSuggestionsPanel に検索/ソース/日付フィルタ追加・news 取り込みデフォルトを `--recent-days 7` に変更 (両メタスキル)・Supabase pending 20件。本番未デプロイ (build パス済み・型チェッククリーン)。
+**次の一手**: git push & Vercel デプロイ → https://multi-agent-xi.vercel.app で「📰 業界ニュース議論」テーマ選択 → 記事ピッカー → 議論開始の golden path を実機確認 (鹿島視点でニュースを論じているか)。
+**注意点**: `setup_context` に `news_article` フィールド追加。既存セッションは互換 (オプショナル)。TypeScript Phase E (App.tsx の @ts-nocheck 解除・型付与) は将来の独立セッション。
 
 ## 📝 変更履歴
 
+- **2026-05-08**: Bundle 14 — ニュース議論モード追加。(1) `news-auto-pipeline` / `email-news-auto-pipeline` 両メタスキルの Step 3 を `--recent-days 7` に変更し、`push_to_supabase.py` で 14件追加投入 (pending 20件)。(2) NewsSuggestionsPanel に検索ボックス + ソース dropdown + 日付範囲 + 件数表示。(3) 議題テーマに `news_discussion`「📰 業界ニュース議論」追加 + 専用 NewsDiscussionPicker コンポーネント作成。(4) gemini.ts の SetupContext に `news_article` 型追加・systemInstruction にニュース議論ガイダンス注入・プロンプトに【議題ニュース記事】ブロック追加。i18n ja/en 両方対応。Vercel 未デプロイ。
+- **2026-05-06〜07**: Bundle 13 — TypeScript Phase C-D (5コンポーネント+App.tsx @ts-nocheck 方式で .tsx 化)・新機能3点 (AgentProfileModal/DebriefingPanel/DiscussionHeatmap)・RLS Option A (migration_20260506_rls.sql)・エージェント52→20体削減 (32ファイル削除・index.json更新)・expert_agents 同期 (migration_20260507_sync_expert_agents.sql・20体確認済)。Vercel デプロイ済。
 - **2026-05-05**: デザインシステム適用 — DESIGN.md (Linear-inspired, role colors 維持) + src/index.css に font-size:14px / letter-spacing:-0.005em / heading compression 追加。commit c2e2b13, Vercel デプロイ済。
 - **2026-05-05**: Bundle 12 — TypeScript Phase A (tsconfig.json + checkJs:false で既存 JSX 無影響) + ニュース cron scaffold (api/news-cron.mjs 5 RSS feeds Gemini topic 生成 / news_suggestions テーブル migration 適用 / workflow_dispatch-only GitHub Actions / NewsSuggestionsPanel + App.jsx 統合 / i18n 対応)。commits: 6367a0b (TS Phase A), c4428d4 (Bundle 12)。
 
@@ -148,6 +150,6 @@
 |------|------|--------------|
 | Gemini モデル | `gemini-2.0-flash` | 定期的に最新モデルへ更新（例: `gemini-2.5-flash`） |
 | lucide-react | `^1.6.0` | アイコン名変更で不具合が出た場合は `0.x.x` 系に戻す |
-| Supabase RLS | 全ユーザー読み書き可（MVP設定） | 本番前に Supabase Auth を導入して認証を実装 |
+| Supabase RLS | Option A 適用済 (projects/sessions: owner_id IS NULL or auth.uid()・他テーブル: USING true) | Supabase Auth 導入後に owner_id 設定機能を実装 |
 | sessionStorage | セッション進行状況を保存 | 将来的に Supabase 保存と統合してデバイス跨ぎ復元も可能に |
 | localStorage | エージェント設定・カスタムテーマを保存 | ブラウザクリアで消えるため、Supabase にも保存する仕組みへ |

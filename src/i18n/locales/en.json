@@ -38,7 +38,15 @@
     "dismiss": "✕ Dismiss",
     "source": "Source",
     "fetched": "Fetched",
-    "refresh": "↻ Refresh"
+    "refresh": "↻ Refresh",
+    "search_placeholder": "🔍 Filter by title, summary or source…",
+    "source_all": "All sources",
+    "range_all": "All time",
+    "range_1d": "Last 24h",
+    "range_3d": "Last 3 days",
+    "range_7d": "Last 7 days",
+    "count_label": "{{shown}} / {{total}}",
+    "no_match": "No news matches the current filters"
   },
   "news": {
     "button": "Spin up topic from news",
@@ -161,6 +169,8 @@
     "go_no_go_desc": "Decide whether to proceed from multiple perspectives",
     "design_change_label": "📐 Responding to design changes",
     "design_change_desc": "Analyze the impact and risks of design changes",
+    "news_discussion_label": "📰 Industry news discussion",
+    "news_discussion_desc": "Pick a pending news article and debate how the firm should respond",
     "custom_label": "💬 Custom consultation",
     "custom_desc": "Set a specific issue freely and consult",
     "select_heading": "🗣️ Select a discussion theme",
@@ -198,7 +208,16 @@
     "prfaq_placeholder": "# Press Release (at completion)\nHeadline: \nBody: \n\n# FAQ\nQ: What is the biggest value for the client?\nA: \nQ: What is the biggest risk on site?\nA: ",
     "prfaq_hint": "Amazon's PRFAQ method: writing the launch press release first sharpens discussion focus. Client, site, and investor perspectives surface naturally.",
     "start": "🚀 Start discussion",
-    "start_failed": "Failed to start discussion: {{error}}"
+    "start_failed": "Failed to start discussion: {{error}}",
+    "pick_news_first": "📰 Pick a news article first"
+  },
+  "news_discussion": {
+    "picker_title": "Pick a news article to discuss",
+    "picker_hint": "Choose one pending news suggestion as the meeting topic. The article summary is auto-loaded into the context, and the suggested goal / focus points are pre-filled if empty.",
+    "selected_label": "Selected article",
+    "open_source": "Open source",
+    "change": "Change",
+    "empty_hint": "No pending news suggestions available. Run the news pipeline from the dashboard badge first."
   },
   "session": {
     "back_history": "← Back to history",

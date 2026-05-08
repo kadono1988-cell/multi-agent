@@ -14,6 +14,7 @@ import {
 import { LanguageToggle } from './components/LanguageToggle'
 import { AuthBar } from './components/AuthBar'
 import { NewsSuggestionsPanel } from './components/NewsSuggestionsPanel'
+import { NewsDiscussionPicker } from './components/NewsDiscussionPicker'
 import { RagLibraryTab } from './components/RagLibraryTab'
 import { AgentProfileModal } from './components/AgentProfileModal'
 import { DebriefingPanel } from './components/DebriefingPanel'
@@ -81,10 +82,11 @@ function App() {
   const dateLocale = i18n.resolvedLanguage === 'en' ? 'en-US' : 'ja-JP'
 
   const DEFAULT_THEMES = [
-    { id: 'delay',         label: t('themes.delay_label'),         desc: t('themes.delay_desc') },
-    { id: 'go_no_go',      label: t('themes.go_no_go_label'),      desc: t('themes.go_no_go_desc') },
-    { id: 'design_change', label: t('themes.design_change_label'), desc: t('themes.design_change_desc') },
-    { id: 'custom',        label: t('themes.custom_label'),        desc: t('themes.custom_desc') },
+    { id: 'delay',           label: t('themes.delay_label'),           desc: t('themes.delay_desc') },
+    { id: 'go_no_go',        label: t('themes.go_no_go_label'),        desc: t('themes.go_no_go_desc') },
+    { id: 'design_change',   label: t('themes.design_change_label'),   desc: t('themes.design_change_desc') },
+    { id: 'news_discussion', label: t('themes.news_discussion_label'), desc: t('themes.news_discussion_desc') },
+    { id: 'custom',          label: t('themes.custom_label'),          desc: t('themes.custom_desc') },
   ]
 
   // ── Core state ──────────────────────────────────────────────────────────────
@@ -106,6 +108,7 @@ function App() {
   const [setupGoal, setSetupGoal]           = useState('')
   const [setupFocusPoints, setSetupFocusPoints] = useState('')
   const [setupPrfaq, setSetupPrfaq]         = useState('')
+  const [setupNewsArticle, setSetupNewsArticle] = useState(null) // selected NewsSuggestion when theme === 'news_discussion'
   const [isThinking, setIsThinking]         = useState(false)
   const [thinkingAgent, setThinkingAgent]   = useState(null)
 
@@ -662,6 +665,14 @@ function App() {
       prfaq: setupPrfaq,
       persona_files: personaFiles,
       briefing: briefingDoc?.approved ? briefingDoc : null,
+      news_article: setupNewsArticle ? {
+        title: setupNewsArticle.source_title,
+        source_feed: setupNewsArticle.source_feed,
+        source_url: setupNewsArticle.source_url || '',
+        fetched_at: setupNewsArticle.fetched_at,
+        summary: setupNewsArticle.suggested_summary || '',
+        suggested_project: setupNewsArticle.suggested_project || null,
+      } : null,
     };
     setLoading(true);
 
@@ -694,6 +705,7 @@ function App() {
       setMessages([]);
       setCurrentRound(1);
       setSetupTheme(null);
+      setSetupNewsArticle(null);
       setLoading(false);
       setIsThinking(true);
 
@@ -794,6 +806,14 @@ function App() {
             prfaq: setupPrfaq,
             persona_files: personaFiles,
             briefing: briefingDoc?.approved ? briefingDoc : null,
+            news_article: session?.setup_context?.news_article || (setupNewsArticle ? {
+              title: setupNewsArticle.source_title,
+              source_feed: setupNewsArticle.source_feed,
+              source_url: setupNewsArticle.source_url || '',
+              fetched_at: setupNewsArticle.fetched_at,
+              summary: setupNewsArticle.suggested_summary || '',
+              suggested_project: setupNewsArticle.suggested_project || null,
+            } : null),
           };
           const response = await generateAgentResponseStream(
             agentKey, session, activeProject, nextR, currentMessages, roundContext, sessionAgents,
@@ -1563,12 +1583,30 @@ function App() {
             setupTheme ? (
               <div className="card form-card setup-panel-card">
                 <div style={{ marginBottom: '1.5rem' }}>
-                  <button className="btn-icon" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }} onClick={() => setSetupTheme(null)}>{t('setup.back')}</button>
+                  <button className="btn-icon" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }} onClick={() => { setSetupTheme(null); setSetupNewsArticle(null); }}>{t('setup.back')}</button>
                   <h2>{t('setup.title')}</h2>
                   <p style={{ color: 'var(--secondary)', fontSize: '0.88rem', marginTop: '0.3rem' }}>
                     {t('setup.current_theme')} <strong>{THEMES.find(th => th.id === setupTheme)?.label}</strong>
                   </p>
                 </div>
+
+                {setupTheme === 'news_discussion' && (
+                  <NewsDiscussionPicker
+                    article={setupNewsArticle}
+                    suggestions={newsSuggestions}
+                    onPick={(s) => {
+                      setSetupNewsArticle(s);
+                      const proj = (s.suggested_project || {});
+                      const articleHeader = `【議題ニュース】\n${s.source_title}\n出典: ${s.source_feed}${s.source_url ? ` ・ ${s.source_url}` : ''}\n取得日: ${new Date(s.fetched_at).toLocaleDateString()}\n\n${s.suggested_summary || ''}`;
+                      setSetupContext(articleHeader);
+                      if (proj.goal && !setupGoal) setSetupGoal(proj.goal);
+                      if (proj.focus_points && !setupFocusPoints) setSetupFocusPoints(proj.focus_points);
+                      if (proj.constraints && !setupConstraints) setSetupConstraints(proj.constraints);
+                    }}
+                    onClear={() => setSetupNewsArticle(null)}
+                    t={t}
+                  />
+                )}
                 <div className="form-grid">
                   <div className="form-group full">
                     <label>{t('setup.context_label')} <span style={{ fontWeight:400, color:'var(--secondary)' }}>{t('setup.optional_suffix')}</span></label>
@@ -1757,8 +1795,8 @@ function App() {
                   </p>
                 </div>
                 <button className="btn btn-primary" style={{ width:'100%', marginTop:'1.5rem', padding:'1rem' }}
-                  onClick={startNewSession} disabled={loading}>
-                  {loading ? t('common.preparing') : t('setup.start')}
+                  onClick={startNewSession} disabled={loading || (setupTheme === 'news_discussion' && !setupNewsArticle)}>
+                  {loading ? t('common.preparing') : (setupTheme === 'news_discussion' && !setupNewsArticle) ? t('setup.pick_news_first') : t('setup.start')}
                 </button>
               </div>
             ) : (

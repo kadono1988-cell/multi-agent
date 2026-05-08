@@ -43,6 +43,14 @@ export interface SetupContext {
     decision_criteria?: string[];
   };
   persona_files?: Record<string, string>;
+  news_article?: {
+    title: string;
+    source_feed: string;
+    source_url?: string;
+    fetched_at?: string;
+    summary?: string;
+    suggested_project?: Record<string, unknown> | null;
+  } | null;
   [key: string]: unknown;
 }
 
@@ -217,6 +225,15 @@ function buildAgentPrompt(
     ${setupContext.briefing.decision_criteria?.length ? `判断基準:\n  - ${setupContext.briefing.decision_criteria.join('\n  - ')}` : ''}
   ` : '';
 
+  const newsArticle = setupContext?.news_article;
+  const newsArticleBlock = newsArticle ? `
+    【議題ニュース記事】
+    - タイトル: ${newsArticle.title}
+    - 出典: ${newsArticle.source_feed}${newsArticle.source_url ? ` (${newsArticle.source_url})` : ''}
+    - 取得日: ${newsArticle.fetched_at ? new Date(newsArticle.fetched_at).toLocaleDateString('ja-JP') : '未設定'}
+    - 要約: ${newsArticle.summary || '（要約なし）'}
+  ` : '';
+
   const sessionDetails = `
     【今回の相談コンテキスト】
     - 相談内容: ${setupContext?.user_context || '未設定'}
@@ -231,7 +248,13 @@ function buildAgentPrompt(
         : ''
     }
 ${briefingBlock}
+${newsArticleBlock}
   `;
+
+  const isNewsDiscussion = session?.theme_type === 'news_discussion' || (typeof session?.theme_type === 'string' && session.theme_type.startsWith('news_discussion'));
+  const newsDiscussionGuidance = isNewsDiscussion
+    ? `\n【ニュース議論モード】今回は実在の業界ニュースを議題とします。「鹿島建設にとってこのニュースが何を意味するか」「自社事業への波及・対応策・機会とリスク」を担当領域の視点で具体的に論じてください。憶測ではなく、ニュース本文と自社の現状から論理的に導いてください。${newsArticle ? `引用時は「${newsArticle.source_feed}」を出典として明記してください。` : ''}`
+    : '';
 
   // Focus points は全ラウンドで一貫した視点注入として systemInstruction にも注入する
   const focusInjection = setupContext?.focus_points
@@ -251,7 +274,7 @@ ${briefingBlock}
     : '';
 
   let prompt = '';
-  let systemInstruction = `あなたは鹿島建設株式会社の${role.name}として会議に参加するビジネスパーソンです。${role.description} 話し方は丁寧なビジネス敬語を使い、専門性と定量的な根拠に基づいて発言してください。あなたと他の参加者の違いは話し方ではなく、担当領域・重視するKPI・リスク感度です。${focusInjection}${personaInjection}`;
+  let systemInstruction = `あなたは鹿島建設株式会社の${role.name}として会議に参加するビジネスパーソンです。${role.description} 話し方は丁寧なビジネス敬語を使い、専門性と定量的な根拠に基づいて発言してください。あなたと他の参加者の違いは話し方ではなく、担当領域・重視するKPI・リスク感度です。${newsDiscussionGuidance}${focusInjection}${personaInjection}`;
 
   // Map round → prompt template. Prefer explicit roundType (Bundle 2);
   // fall back to legacy round-number mapping for older callers.
